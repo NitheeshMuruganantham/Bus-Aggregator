@@ -629,8 +629,8 @@ class _SearchScreenState extends State<SearchScreen> {
               ],
             ),
           ),
-          SizedBox(
-            width: double.infinity,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: _buildHeroSearchCard(),
           ),
           Padding(
