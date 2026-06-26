@@ -1,6 +1,8 @@
 class BusModel {
   final int id;
   final String operator;
+  final String from;
+  final String to;
   final String departure;
   final String arrival;
   final String duration;
@@ -15,6 +17,8 @@ class BusModel {
   BusModel({
     required this.id,
     required this.operator,
+    required this.from,
+    required this.to,
     required this.departure,
     required this.arrival,
     required this.duration,
@@ -31,6 +35,8 @@ class BusModel {
     return BusModel(
       id: json['id'] as int,
       operator: json['operator'] as String,
+      from: (json['from'] ?? '') as String,
+      to: (json['to'] ?? '') as String,
       departure: json['departure'] as String,
       arrival: json['arrival'] as String,
       duration: json['duration'] as String,
@@ -44,20 +50,20 @@ class BusModel {
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'operator': operator,
-      'departure': departure,
-      'arrival': arrival,
-      'duration': duration,
-      'rating': rating,
-      'layout': layout,
-      'price': price,
-      'availableSeats': availableSeats,
-      'platforms': platforms,
-      'busType': busType,
-      'amenities': amenities,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'operator': operator,
+        'from': from,
+        'to': to,
+        'departure': departure,
+        'arrival': arrival,
+        'duration': duration,
+        'rating': rating,
+        'layout': layout,
+        'price': price,
+        'availableSeats': availableSeats,
+        'platforms': platforms,
+        'busType': busType,
+        'amenities': amenities,
+      };
 }
