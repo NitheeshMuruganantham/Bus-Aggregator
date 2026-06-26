@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../utils/constants.dart';
+import '../utils/app_theme.dart';
 
 class CustomButton extends StatelessWidget {
   final String text;
@@ -20,30 +20,32 @@ class CustomButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool enabled = onPressed != null && !isLoading;
+    final primary = Theme.of(context).colorScheme.primary;
+    final p = context.palette;
 
     return SizedBox(
       width: fullWidth ? double.infinity : null,
-      height: 56,
+      height: 52,
       child: ElevatedButton(
         onPressed: enabled ? onPressed : null,
         style: ElevatedButton.styleFrom(
-          backgroundColor:
-              enabled ? AppColors.primary : AppColors.border,
-          disabledBackgroundColor: AppColors.border,
-          foregroundColor: Colors.black,
-          disabledForegroundColor: AppColors.textSecondary,
-          elevation: 0,
+          backgroundColor: enabled ? primary : p.border,
+          disabledBackgroundColor: p.border,
+          foregroundColor: p.onPrimary,
+          disabledForegroundColor: p.textSecondary,
+          elevation: enabled ? 2 : 0,
+          shadowColor: p.shadow,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
         ),
         child: isLoading
-            ? const SizedBox(
+            ? SizedBox(
                 width: 24,
                 height: 24,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Colors.black,
+                  color: p.onPrimary,
                 ),
               )
             : Row(
@@ -55,7 +57,7 @@ class CustomButton extends StatelessWidget {
                     text,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                      fontSize: 15,
                     ),
                   ),
                   if (icon != null) ...[

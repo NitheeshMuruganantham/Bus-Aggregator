@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/bus_model.dart';
-import '../utils/constants.dart';
+import '../utils/app_theme.dart';
 import '../utils/navigation.dart';
 import '../widgets/bus_card.dart';
 import '../widgets/shimmer_loader.dart';
@@ -98,28 +98,28 @@ class _BusListScreenState extends State<BusListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
+    final primary = Theme.of(context).colorScheme.primary;
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back, color: p.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
         title: Column(
           children: [
-            const Text(
+            Text(
               'Available Buses',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
+                color: p.textPrimary,
               ),
             ),
             Text(
               '${widget.buses.length} buses found',
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(fontSize: 12, color: p.textSecondary),
             ),
           ],
         ),
@@ -142,24 +142,26 @@ class _BusListScreenState extends State<BusListScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                     decoration: BoxDecoration(
-                      color: isActive
-                          ? AppColors.primary
-                          : AppColors.cardBg,
+                      color: isActive ? primary : p.cardBg,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: isActive
-                            ? AppColors.primary
-                            : AppColors.border,
+                        color: isActive ? primary : p.border,
                       ),
+                      boxShadow: isActive
+                          ? [
+                              BoxShadow(
+                                color: primary.withValues(alpha: 0.25),
+                                blurRadius: 6,
+                              ),
+                            ]
+                          : null,
                     ),
                     child: Text(
                       sort,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: isActive
-                            ? Colors.black
-                            : AppColors.textSecondary,
+                        color: isActive ? p.onPrimary : p.textSecondary,
                       ),
                     ),
                   ),
@@ -189,42 +191,38 @@ class _BusListScreenState extends State<BusListScreen> {
   }
 
   Widget _buildEmptyState() {
+    final p = context.palette;
+    final primary = Theme.of(context).colorScheme.primary;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.event_seat,
-              size: 64,
-              color: AppColors.textSecondary,
-            ),
+            Icon(Icons.event_seat, size: 64, color: p.textSecondary),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'No buses match your seat preference',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
+                color: p.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Try selecting different seats or use Count Mode',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(fontSize: 14, color: p.textSecondary),
             ),
             const SizedBox(height: 24),
             OutlinedButton(
               onPressed: () => Navigator.pop(context),
               style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                side: const BorderSide(color: AppColors.primary),
+                foregroundColor: primary,
+                side: BorderSide(color: primary),
               ),
               child: const Text('Change Selection'),
             ),

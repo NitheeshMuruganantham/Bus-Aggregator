@@ -4,12 +4,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/mock_data.dart';
 import '../models/bus_model.dart';
 import '../models/seat_model.dart';
-import '../utils/constants.dart';
+import '../utils/app_theme.dart';
 import '../utils/navigation.dart';
 import '../utils/seat_filter_logic.dart';
+import '../widgets/bus_layout_view.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/layout_tabs.dart';
-import '../widgets/seat_cell.dart';
 import '../widgets/selection_mode_toggle.dart';
 import 'bus_list_screen.dart';
 
@@ -126,9 +126,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
         _preferences.remove('Any Layout');
         if (_preferences.contains(pref)) {
           _preferences.remove(pref);
-          if (_preferences.isEmpty) {
-            _preferences.add('Any Layout');
-          }
+          if (_preferences.isEmpty) _preferences.add('Any Layout');
         } else {
           _preferences.add(pref);
         }
@@ -137,31 +135,25 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
   }
 
   bool get _canFindBuses {
-    if (_mode == 'Position') {
-      return _selectedSeats.isNotEmpty;
-    }
+    if (_mode == 'Position') return _selectedSeats.isNotEmpty;
     return _seatCount >= 1;
   }
 
   void _findBuses() {
     if (!_canFindBuses) return;
-
     HapticFeedback.mediumImpact();
 
-    List<BusModel> results;
-    if (_mode == 'Position') {
-      results = SeatFilterLogic.filterBySelectedSeats(
-        selectedSeats: _selectedSeats,
-        layout: _layout,
-        allBuses: _allBuses,
-      );
-    } else {
-      results = SeatFilterLogic.filterByCount(
-        count: _seatCount,
-        layout: _layout,
-        allBuses: _allBuses,
-      );
-    }
+    final results = _mode == 'Position'
+        ? SeatFilterLogic.filterBySelectedSeats(
+            selectedSeats: _selectedSeats,
+            layout: _layout,
+            allBuses: _allBuses,
+          )
+        : SeatFilterLogic.filterByCount(
+            count: _seatCount,
+            layout: _layout,
+            allBuses: _allBuses,
+          );
 
     Navigator.push(
       context,
@@ -190,41 +182,44 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
+    final primary = Theme.of(context).colorScheme.primary;
+
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back, color: p.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
         title: Column(
           children: [
             Text(
               '${widget.from} → ${widget.to}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
+                color: p.textPrimary,
               ),
             ),
             Text(
               '${widget.date} | ${widget.timeSlot}',
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(fontSize: 12, color: p.textSecondary),
             ),
           ],
         ),
       ),
       body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Column(
           children: [
             SelectionModeToggle(
               selectedMode: _mode,
               onModeChanged: _onModeChanged,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
+            const SeatLegend(),
+            const SizedBox(height: 16),
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
@@ -234,7 +229,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
               ),
             ),
             if (_mode == 'Position' && _selectedSeats.isNotEmpty)
-              _buildSelectedSummary(),
+              _buildSelectedSummary(primary, p),
             const SizedBox(height: 8),
             LayoutTabs(
               selectedLayout: _layout,
@@ -252,31 +247,26 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
     );
   }
 
-  Widget _buildSelectedSummary() {
+  Widget _buildSelectedSummary(Color primary, AppPalette p) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
+        color: primary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: primary.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
           Expanded(
             child: Text(
-              '${_selectedSeats.length} seats selected: ${_selectedSeats.join(', ')}',
-              style: const TextStyle(
-                color: AppColors.primary,
-                fontSize: 12,
-              ),
+              '${_selectedSeats.length} seats: ${_selectedSeats.join(', ')}',
+              style: TextStyle(color: primary, fontSize: 12),
             ),
           ),
           TextButton(
             onPressed: _clearSelection,
-            child: const Text(
-              'Clear',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
+            child: Text('Clear', style: TextStyle(color: p.textSecondary)),
           ),
         ],
       ),
@@ -284,89 +274,83 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
   }
 
   Widget _buildCountMode() {
+    final p = context.palette;
+    final primary = Theme.of(context).colorScheme.primary;
+
     return Center(
       key: const ValueKey('count'),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text(
-            'How many seats?',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _circleButton(
-                icon: Icons.remove,
-                onTap: _seatCount > 1
-                    ? () => setState(() => _seatCount--)
-                    : null,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.groups, size: 48, color: primary.withValues(alpha: 0.5)),
+            const SizedBox(height: 16),
+            Text(
+              'How many seats?',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: p.textPrimary,
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Text(
-                  '$_seatCount',
-                  style: const TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _circleButton(Icons.remove, _seatCount > 1
+                    ? () => setState(() => _seatCount--)
+                    : null),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    '$_seatCount',
+                    style: TextStyle(
+                      fontSize: 36,
+                      fontWeight: FontWeight.bold,
+                      color: p.textPrimary,
+                    ),
                   ),
                 ),
-              ),
-              _circleButton(
-                icon: Icons.add,
-                onTap: _seatCount < 10
+                _circleButton(Icons.add, _seatCount < 10
                     ? () => setState(() => _seatCount++)
-                    : null,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Finding $_seatCount seats in any position',
-            style: const TextStyle(
-              fontSize: 14,
-              color: AppColors.textSecondary,
+                    : null),
+              ],
             ),
-          ),
-          const SizedBox(height: 24),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            alignment: WrapAlignment.center,
-            children: _preferenceOptions.map((pref) {
-              final selected = _preferences.contains(pref);
-              return FilterChip(
-                label: Text(pref),
-                selected: selected,
-                onSelected: (_) => _togglePreference(pref),
-                selectedColor: AppColors.primary.withValues(alpha: 0.2),
-                checkmarkColor: AppColors.primary,
-                labelStyle: TextStyle(
-                  color: selected
-                      ? AppColors.primary
-                      : AppColors.textSecondary,
-                  fontSize: 12,
-                ),
-                backgroundColor: AppColors.cardBg,
-                side: const BorderSide(color: AppColors.border),
-              );
-            }).toList(),
-          ),
-        ],
+            const SizedBox(height: 12),
+            Text(
+              'Finding $_seatCount seats in any position',
+              style: TextStyle(fontSize: 14, color: p.textSecondary),
+            ),
+            const SizedBox(height: 24),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: _preferenceOptions.map((pref) {
+                final selected = _preferences.contains(pref);
+                return FilterChip(
+                  label: Text(pref),
+                  selected: selected,
+                  onSelected: (_) => _togglePreference(pref),
+                  selectedColor: primary.withValues(alpha: 0.15),
+                  checkmarkColor: primary,
+                  labelStyle: TextStyle(
+                    color: selected ? primary : p.textSecondary,
+                    fontSize: 12,
+                  ),
+                  backgroundColor: p.chipBg,
+                  side: BorderSide(color: p.border),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _circleButton({
-    required IconData icon,
-    required VoidCallback? onTap,
-  }) {
+  Widget _circleButton(IconData icon, VoidCallback? onTap) {
+    final p = context.palette;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -374,14 +358,26 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
         height: 48,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: onTap != null ? AppColors.cardBg : AppColors.border,
-          border: Border.all(color: AppColors.border),
+          color: onTap != null ? p.cardBg : p.chipBg,
+          border: Border.all(
+            color: onTap != null
+                ? Theme.of(context).colorScheme.primary
+                : p.border,
+            width: 1.5,
+          ),
+          boxShadow: onTap != null
+              ? [
+                  BoxShadow(
+                    color: p.shadow,
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Icon(
           icon,
-          color: onTap != null
-              ? AppColors.textPrimary
-              : AppColors.textSecondary,
+          color: onTap != null ? p.textPrimary : p.textSecondary,
         ),
       ),
     );
@@ -390,233 +386,11 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
   Widget _buildPositionGrid() {
     return SingleChildScrollView(
       key: ValueKey(_layout),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: _buildLayoutGrid(),
+      child: BusLayoutView(
+        layout: _layout,
+        seats: _seatGrid,
+        onSeatTap: _toggleSeat,
       ),
-    );
-  }
-
-  Widget _buildLayoutGrid() {
-    switch (_layout) {
-      case '2+1':
-        return _buildTwoPlusOneGrid();
-      case '2+2':
-        return _buildTwoPlusTwoGrid();
-      case 'Sleeper':
-        return _buildSleeperGrid();
-      case 'Semi-Sleeper':
-        return _buildSemiSleeperGrid();
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
-  SeatModel? _findSeat(String id) {
-    try {
-      return _seatGrid.firstWhere((s) => s.id == id);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Widget _buildTwoPlusOneGrid() {
-    return Column(
-      children: [
-        const Icon(Icons.directions_bus, color: AppColors.textSecondary),
-        const Text('Driver', style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _headerLabel('A'),
-            const SizedBox(width: 68),
-            _headerLabel('B'),
-            const SizedBox(width: 8),
-            _headerLabel('C'),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ...List.generate(10, (rowIndex) {
-          final row = rowIndex + 1;
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _seatWidget('${row}A'),
-                const SizedBox(width: 16),
-                _seatWidget('${row}B'),
-                const SizedBox(width: 8),
-                _seatWidget('${row}C'),
-              ],
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget _buildTwoPlusTwoGrid() {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _headerLabel('A'),
-            const SizedBox(width: 8),
-            _headerLabel('B'),
-            const SizedBox(width: 24),
-            _headerLabel('C'),
-            const SizedBox(width: 8),
-            _headerLabel('D'),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ...List.generate(10, (rowIndex) {
-          final row = rowIndex + 1;
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _seatWidget('${row}A'),
-                const SizedBox(width: 8),
-                _seatWidget('${row}B'),
-                const SizedBox(width: 24),
-                _seatWidget('${row}C'),
-                const SizedBox(width: 8),
-                _seatWidget('${row}D'),
-              ],
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget _buildSleeperGrid() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'LOWER',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 8),
-        ...List.generate(7, (rowIndex) {
-          final row = rowIndex + 1;
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _seatWidget('L${row}A', height: 80),
-                const SizedBox(width: 8),
-                _seatWidget('L${row}B', height: 80),
-                const SizedBox(width: 8),
-                _seatWidget('L${row}C', height: 80),
-              ],
-            ),
-          );
-        }),
-        const SizedBox(height: 16),
-        const Text(
-          'UPPER',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 8),
-        ...List.generate(7, (rowIndex) {
-          final row = rowIndex + 1;
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _seatWidget('U${row}A', height: 80),
-                const SizedBox(width: 8),
-                _seatWidget('U${row}B', height: 80),
-                const SizedBox(width: 8),
-                _seatWidget('U${row}C', height: 80),
-              ],
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget _buildSemiSleeperGrid() {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _headerLabel('A'),
-            const SizedBox(width: 8),
-            _headerLabel('B'),
-            const SizedBox(width: 24),
-            _headerLabel('C'),
-            const SizedBox(width: 8),
-            _headerLabel('D'),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ...List.generate(10, (rowIndex) {
-          final row = rowIndex + 1;
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _seatWidget('${row}A', height: 72, showRecline: true),
-                const SizedBox(width: 8),
-                _seatWidget('${row}B', height: 72, showRecline: true),
-                const SizedBox(width: 24),
-                _seatWidget('${row}C', height: 72, showRecline: true),
-                const SizedBox(width: 8),
-                _seatWidget('${row}D', height: 72, showRecline: true),
-              ],
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget _headerLabel(String label) {
-    return SizedBox(
-      width: 52,
-      child: Text(
-        label,
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          fontSize: 12,
-          color: AppColors.textSecondary,
-        ),
-      ),
-    );
-  }
-
-  Widget _seatWidget(String id, {double height = 60, bool showRecline = false}) {
-    final seat = _findSeat(id);
-    if (seat == null) {
-      return SizedBox(width: 52, height: height);
-    }
-    return SeatCell(
-      seatModel: seat,
-      isSelected: seat.isSelected,
-      height: height,
-      showReclineIcon: showRecline,
-      onTap: () => _toggleSeat(seat),
     );
   }
 }

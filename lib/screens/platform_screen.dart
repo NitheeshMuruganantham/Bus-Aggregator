@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/bus_model.dart';
 import '../models/platform_model.dart';
 import '../services/makemytrip_service.dart';
+import '../utils/app_theme.dart';
 import '../utils/constants.dart';
 import '../widgets/platform_card.dart';
 
@@ -111,13 +112,16 @@ class _PlatformScreenState extends State<PlatformScreen> {
   void _onBookNow(PlatformModel platform) {
     HapticFeedback.heavyImpact();
 
+    final p = context.palette;
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.cardBg,
+      backgroundColor: p.cardBg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) {
+        final sheetP = context.palette;
         return Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -135,17 +139,17 @@ class _PlatformScreenState extends State<PlatformScreen> {
               const SizedBox(height: 12),
               Text(
                 "You'll be redirected to ${platform.name}",
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
-                  color: AppColors.textPrimary,
+                  color: sheetP.textPrimary,
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'Complete your booking there',
                 style: TextStyle(
                   fontSize: 12,
-                  color: AppColors.textSecondary,
+                  color: sheetP.textSecondary,
                 ),
               ),
               const SizedBox(height: 24),
@@ -155,8 +159,8 @@ class _PlatformScreenState extends State<PlatformScreen> {
                     child: OutlinedButton(
                       onPressed: () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.textSecondary,
-                        side: const BorderSide(color: AppColors.border),
+                        foregroundColor: sheetP.textSecondary,
+                        side: BorderSide(color: sheetP.border),
                       ),
                       child: const Text('Cancel'),
                     ),
@@ -192,7 +196,7 @@ class _PlatformScreenState extends State<PlatformScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Opening ${platform.name}...'),
-            backgroundColor: AppColors.cardBg,
+            backgroundColor: context.palette.cardBg,
           ),
         );
       }
@@ -202,29 +206,28 @@ class _PlatformScreenState extends State<PlatformScreen> {
   @override
   Widget build(BuildContext context) {
     final savings = _maxPrice - _minPrice;
+    final p = context.palette;
+    final primary = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back, color: p.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
         title: Column(
           children: [
             Text(
               widget.bus.operator,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
+                color: p.textPrimary,
               ),
             ),
             Text(
               '${widget.bus.layout} · ${widget.bus.departure}',
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(fontSize: 12, color: p.textSecondary),
             ),
           ],
         ),
@@ -236,24 +239,18 @@ class _PlatformScreenState extends State<PlatformScreen> {
               padding: const EdgeInsets.only(top: 8),
               children: [
                 _buildBusInfoCard(),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
                   child: Text(
                     'Choose where to book',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                    ),
+                    style: TextStyle(fontSize: 14, color: p.textSecondary),
                   ),
                 ),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: Text(
                     'Prices may vary on each platform',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
+                    style: TextStyle(fontSize: 12, color: p.textSecondary),
                   ),
                 ),
                 ..._platforms.map((platform) {
@@ -269,25 +266,22 @@ class _PlatformScreenState extends State<PlatformScreen> {
                     child: Text(
                       'Save ₹$savings vs most expensive',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
+                        color: primary,
                       ),
                     ),
                   ),
               ],
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.all(16),
+          Padding(
+            padding: const EdgeInsets.all(16),
             child: Text(
               'SeatFirst finds · Partners book · You save',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(fontSize: 12, color: p.textSecondary),
             ),
           ),
         ],
@@ -296,23 +290,29 @@ class _PlatformScreenState extends State<PlatformScreen> {
   }
 
   Widget _buildBusInfoCard() {
+    final p = context.palette;
+    final primary = Theme.of(context).colorScheme.primary;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.cardBg,
+        color: p.cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: p.border),
+        boxShadow: [
+          BoxShadow(color: p.shadow, blurRadius: 8, offset: const Offset(0, 3)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             widget.bus.operator,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+              color: p.textPrimary,
             ),
           ),
           const SizedBox(height: 8),
@@ -321,23 +321,20 @@ class _PlatformScreenState extends State<PlatformScreen> {
             children: [
               Text(
                 widget.bus.departure,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+                  color: p.textPrimary,
                 ),
               ),
               Text(
                 widget.bus.duration,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                ),
+                style: TextStyle(fontSize: 12, color: p.textSecondary),
               ),
               Text(
                 widget.bus.arrival,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+                  color: p.textPrimary,
                 ),
               ),
             ],
@@ -358,11 +355,8 @@ class _PlatformScreenState extends State<PlatformScreen> {
               children: widget.selectedSeats.map((seat) {
                 return Chip(
                   label: Text(seat),
-                  backgroundColor: AppColors.primary.withValues(alpha: 0.15),
-                  labelStyle: const TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 12,
-                  ),
+                  backgroundColor: primary.withValues(alpha: 0.12),
+                  labelStyle: TextStyle(color: primary, fontSize: 12),
                   side: BorderSide.none,
                   padding: EdgeInsets.zero,
                 );
@@ -371,10 +365,7 @@ class _PlatformScreenState extends State<PlatformScreen> {
           else if (widget.mode == 'Count')
             Text(
               '${widget.seatCount} seats available',
-              style: const TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(fontSize: 14, color: p.textSecondary),
             ),
         ],
       ),
@@ -382,18 +373,17 @@ class _PlatformScreenState extends State<PlatformScreen> {
   }
 
   Widget _badge(String text) {
+    final p = context.palette;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.border,
+        color: p.chipBg,
         borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: p.border),
       ),
       child: Text(
         text,
-        style: const TextStyle(
-          fontSize: 11,
-          color: AppColors.textSecondary,
-        ),
+        style: TextStyle(fontSize: 11, color: p.textSecondary),
       ),
     );
   }
