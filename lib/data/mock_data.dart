@@ -1332,6 +1332,60 @@ List<BusModel> getMockBuses() {
       busType: 'AC Sleeper',
       amenities: ['AC', 'Blanket', 'Pillow', 'Charging'],
     ),
+    BusModel(
+      id: 42,
+      operator: 'SRS Mixed Express',
+      from: 'Bangalore',
+      to: 'Chennai',
+      departure: '09:30 PM',
+      arrival: '04:30 AM',
+      duration: '7h 00m',
+      rating: 4.2,
+      layout: 'Mixed',
+      price: 580,
+      availableSeats: [
+        // Seater section rows 1-5
+        '1A','1C','2B','2D','3A','3C',
+        '4B','4D','5A','5C',
+        // Sleeper section rows 6-10
+        'L6A','L7B','U6A','U7B',
+        'L8A','U8B','L9A','U9B','L10A',
+      ],
+      platforms: {
+        'RedBus': 580,
+        'AbhiBus': 560,
+        'MakeMyTrip': 595,
+        'Ixigo': 570,
+      },
+      busType: 'AC Mixed',
+      amenities: ['AC','Charging','Water','Blanket'],
+    ),
+    BusModel(
+      id: 43,
+      operator: 'KPN Semi Deluxe',
+      from: 'Bangalore',
+      to: 'Chennai',
+      departure: '08:30 PM',
+      arrival: '03:30 AM',
+      duration: '7h 00m',
+      rating: 4.0,
+      layout: 'Mixed',
+      price: 520,
+      availableSeats: [
+        '1B','1D','2A','2C','3B',
+        '3D','4A','4C','5B','5D',
+        'L6B','L7A','U6B','U7A',
+        'L8B','U8A','L9B','U9A',
+      ],
+      platforms: {
+        'RedBus': 520,
+        'AbhiBus': 505,
+        'MakeMyTrip': 535,
+        'Ixigo': 510,
+      },
+      busType: 'AC Mixed',
+      amenities: ['AC','Charging','Blanket'],
+    ),
   ];
 }
 
