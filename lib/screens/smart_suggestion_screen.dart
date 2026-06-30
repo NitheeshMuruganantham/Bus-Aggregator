@@ -735,9 +735,6 @@ class _SmartSuggestionScreenState
   }
 
   Widget _buildResults() {
-    final totalFound = exactMatches.length +
-      nearbyMatches.length + zoneMatches.length;
-
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
         16, 12, 16,
@@ -747,19 +744,6 @@ class _SmartSuggestionScreenState
         crossAxisAlignment:
           CrossAxisAlignment.start,
         children: [
-
-          // Results count - first item
-          Text(
-            '$totalFound option(s) found',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF1E293B),
-              fontFamily: GoogleFonts.poppins()
-                .fontFamily,
-            ),
-          ),
-          const SizedBox(height: 12),
 
           // ── LAYER 1: EXACT MATCHES ─────────────
           if (exactMatches.isNotEmpty) ...[
