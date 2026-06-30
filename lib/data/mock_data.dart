@@ -72,6 +72,7 @@ List<BusModel> getMockBuses() {
       },
       busType: 'AC Sleeper',
       amenities: ['AC', 'Charging', 'Water'],
+      womenOnlySeats: ['1A', '1B'],
     ),
     BusModel(
       id: 2,
@@ -136,6 +137,7 @@ List<BusModel> getMockBuses() {
       },
       busType: 'AC Seater',
       amenities: ['AC', 'Charging'],
+      womenOnlySeats: ['1A'],
     ),
     BusModel(
       id: 4,
@@ -262,6 +264,7 @@ List<BusModel> getMockBuses() {
       },
       busType: 'AC Seater',
       amenities: ['AC', 'Charging'],
+      womenOnlySeats: ['1A', '2C'],
     ),
     BusModel(
       id: 8,
@@ -1385,6 +1388,225 @@ List<BusModel> getMockBuses() {
       },
       busType: 'AC Mixed',
       amenities: ['AC','Charging','Blanket'],
+    ),
+    
+    // ========== TEST DATA FOR FALLBACK SCENARIOS ==========
+    
+    // Perfect Match Test: Bus with exact seats 1A, 7B, U4C
+    BusModel(
+      id: 100,
+      operator: 'Perfect Match Test Bus',
+      from: 'Bangalore',
+      to: 'Chennai',
+      departure: '09:00 PM',
+      arrival: '04:00 AM',
+      duration: '7h 00m',
+      rating: 4.5,
+      layout: 'Mixed',
+      price: 700,
+      availableSeats: [
+        '1A', '7B', 'U4C', '2A', '3B', 'L1A', 'U2C'
+      ],
+      platforms: {
+        'RedBus': 700,
+        'AbhiBus': 690,
+        'MakeMyTrip': 710,
+        'Ixigo': 695,
+      },
+      busType: 'AC Mixed',
+      amenities: ['AC','Charging','Water'],
+    ),
+    
+    // Nearby Suggestions Test: Buses with nearby seats but not exact
+    BusModel(
+      id: 101,
+      operator: 'Nearby Test Bus 1',
+      from: 'Bangalore',
+      to: 'Chennai',
+      departure: '09:15 PM',
+      arrival: '04:15 AM',
+      duration: '7h 00m',
+      rating: 4.2,
+      layout: '2+2',
+      price: 650,
+      availableSeats: [
+        '1B', '1C', '2A', '7A', '7C', '8A', '8B'
+      ],
+      platforms: {
+        'RedBus': 650,
+        'AbhiBus': 640,
+        'MakeMyTrip': 660,
+        'Ixigo': 645,
+      },
+      busType: 'AC Seater',
+      amenities: ['AC','Charging'],
+    ),
+    BusModel(
+      id: 102,
+      operator: 'Nearby Test Bus 2',
+      from: 'Bangalore',
+      to: 'Chennai',
+      departure: '09:30 PM',
+      arrival: '04:30 AM',
+      duration: '7h 00m',
+      rating: 4.3,
+      layout: '2+2',
+      price: 680,
+      availableSeats: [
+        '2A', '2B', '3A', '6B', '6C', '7A', '9A'
+      ],
+      platforms: {
+        'RedBus': 680,
+        'AbhiBus': 670,
+        'MakeMyTrip': 690,
+        'Ixigo': 675,
+      },
+      busType: 'AC Seater',
+      amenities: ['AC','Charging','Water'],
+    ),
+    
+    // Area Match Test: Buses with front/middle/rear area seats
+    BusModel(
+      id: 103,
+      operator: 'Area Match Front Bus',
+      from: 'Bangalore',
+      to: 'Chennai',
+      departure: '08:45 PM',
+      arrival: '03:45 AM',
+      duration: '7h 00m',
+      rating: 4.4,
+      layout: '2+2',
+      price: 600,
+      availableSeats: [
+        '1A', '1B', '1C', '1D', '2A', '2B', '3A', '3B'
+      ],
+      platforms: {
+        'RedBus': 600,
+        'AbhiBus': 590,
+        'MakeMyTrip': 610,
+        'Ixigo': 595,
+      },
+      busType: 'AC Seater',
+      amenities: ['AC','Charging'],
+    ),
+    BusModel(
+      id: 104,
+      operator: 'Area Match Middle Bus',
+      from: 'Bangalore',
+      to: 'Chennai',
+      departure: '09:00 PM',
+      arrival: '04:00 AM',
+      duration: '7h 00m',
+      rating: 4.1,
+      layout: '2+2',
+      price: 580,
+      availableSeats: [
+        '5A', '5B', '5C', '5D', '6A', '6B', '7A', '7B'
+      ],
+      platforms: {
+        'RedBus': 580,
+        'AbhiBus': 570,
+        'MakeMyTrip': 590,
+        'Ixigo': 575,
+      },
+      busType: 'AC Seater',
+      amenities: ['AC','Water'],
+    ),
+    BusModel(
+      id: 105,
+      operator: 'Area Match Rear Bus',
+      from: 'Bangalore',
+      to: 'Chennai',
+      departure: '09:15 PM',
+      arrival: '04:15 AM',
+      duration: '7h 00m',
+      rating: 4.0,
+      layout: '2+2',
+      price: 550,
+      availableSeats: [
+        '8A', '8B', '8C', '8D', '9A', '9B', '10A', '10B'
+      ],
+      platforms: {
+        'RedBus': 550,
+        'AbhiBus': 540,
+        'MakeMyTrip': 560,
+        'Ixigo': 545,
+      },
+      busType: 'AC Seater',
+      amenities: ['AC'],
+    ),
+    
+    // Split Option Test: Buses that together have all seats
+    BusModel(
+      id: 106,
+      operator: 'Split Option Bus 1',
+      from: 'Bangalore',
+      to: 'Chennai',
+      departure: '10:30 PM',
+      arrival: '05:30 AM',
+      duration: '7h 00m',
+      rating: 4.3,
+      layout: '2+2',
+      price: 620,
+      availableSeats: [
+        '1A', '7B', '2A', '3B', '4C', '5D'
+      ],
+      platforms: {
+        'RedBus': 620,
+        'AbhiBus': 610,
+        'MakeMyTrip': 630,
+        'Ixigo': 615,
+      },
+      busType: 'AC Seater',
+      amenities: ['AC','Charging'],
+    ),
+    BusModel(
+      id: 107,
+      operator: 'Split Option Bus 2',
+      from: 'Bangalore',
+      to: 'Chennai',
+      departure: '10:00 PM',
+      arrival: '05:00 AM',
+      duration: '7h 00m',
+      rating: 4.2,
+      layout: '2+2',
+      price: 800,
+      availableSeats: [
+        'U4C', 'L1A', 'U2B', 'L3C', 'U5A', 'L6B'
+      ],
+      platforms: {
+        'RedBus': 800,
+        'AbhiBus': 790,
+        'MakeMyTrip': 810,
+        'Ixigo': 795,
+      },
+      busType: 'AC Sleeper',
+      amenities: ['AC','Blanket','Water'],
+    ),
+    
+    // No Match Test: Bus with completely different seats
+    BusModel(
+      id: 108,
+      operator: 'No Match Test Bus',
+      from: 'Bangalore',
+      to: 'Chennai',
+      departure: '11:30 PM',
+      arrival: '06:30 AM',
+      duration: '7h 00m',
+      rating: 3.8,
+      layout: '2+2',
+      price: 500,
+      availableSeats: [
+        '3C', '3D', '4A', '4B', '6C', '6D', '9C', '9D'
+      ],
+      platforms: {
+        'RedBus': 500,
+        'AbhiBus': 490,
+        'MakeMyTrip': 510,
+        'Ixigo': 495,
+      },
+      busType: 'AC Seater',
+      amenities: ['AC'],
     ),
   ];
 }

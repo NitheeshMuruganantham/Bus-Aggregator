@@ -220,24 +220,31 @@ class BusCard extends StatelessWidget {
       case 'AC':
         icon = Icons.ac_unit;
         color = Colors.blue;
+        break;
       case 'WiFi':
         icon = Icons.wifi;
         color = Colors.blue;
+        break;
       case 'Charging':
         icon = Icons.bolt;
         color = AppColors.warning;
+        break;
       case 'Water':
         icon = Icons.water_drop;
         color = Colors.cyan;
+        break;
       case 'Blanket':
         icon = Icons.bed;
         color = Colors.purple;
+        break;
       case 'Snacks':
         icon = Icons.fastfood;
         color = Colors.orange;
+        break;
       case 'Pillow':
         icon = Icons.hotel;
         color = Colors.purple;
+        break;
       default:
         icon = Icons.check_circle;
         color = Colors.grey;

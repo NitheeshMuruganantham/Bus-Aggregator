@@ -48,12 +48,29 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
   // Active template
   String activeTemplate = 'Seater';
 
+  // Position vs Count mode
+  bool isPositionMode = true;
+
+  // Current date (can be changed via date selection)
+  String _currentDate;
+
   // Cross-template seat selection
   // Persists when switching tabs
   Map<String, List<String>> allSelectedSeats = {
     'Seater': [],
     'Lower':  [],
     'Upper':  [],
+  };
+
+  // Tracks user's type choice per seat
+  // seatId -> 'women' or 'general'
+  Map<String, String> seatTypePreference = {};
+
+  // Count mode seat counts
+  Map<String, int> templateCounts = {
+    'Seater': 0,
+    'Lower': 0,
+    'Upper': 0,
   };
 
   // Template data (counts + bus maps)
@@ -71,6 +88,15 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
 
   List<BusModel> get _allBuses => getMockBuses();
 
+  _SeatSelectionScreenState() : _currentDate = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _currentDate = widget.date;
+    _loadTemplateData();
+  }
+
   // Get selections across all templates
   List<String> get allSelectedSeatsList => [
     ...allSelectedSeats['Seater']!,
@@ -82,11 +108,9 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
   int get totalSelected =>
     allSelectedSeatsList.length;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadTemplateData();
-  }
+  // Total count mode seats
+  int get totalCountModeSeats =>
+    templateCounts.values.fold(0, (sum, val) => sum + val);
 
   void _loadTemplateData() {
     setState(() => isLoadingTemplate = true);
@@ -123,10 +147,60 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
         'Lower':  [],
         'Upper':  [],
       };
+      seatTypePreference = {};
+    });
+  }
+
+  // Toggle between Position and Count mode
+  void _onModeToggle(bool toPosition) {
+    HapticFeedback.lightImpact();
+    setState(() {
+      isPositionMode = toPosition;
+      if (toPosition) {
+        templateCounts = {
+          'Seater': 0, 'Lower': 0, 'Upper': 0,
+        };
+      } else {
+        allSelectedSeats = {
+          'Seater': [], 'Lower': [], 'Upper': [],
+        };
+      }
     });
   }
 
   // Toggle seat in active template
+  void _onSeatTap(String seatId) {
+    final isSelected = allSelectedSeats[
+      activeTemplate]!.contains(seatId);
+
+    // If deselecting, just remove normally
+    if (isSelected) {
+      HapticFeedback.lightImpact();
+      setState(() {
+        allSelectedSeats[activeTemplate]!
+          .remove(seatId);
+      });
+      return;
+    }
+
+    // Only check women-only split for Seater
+    if (activeTemplate == 'Seater') {
+      final hasMixed = UniversalTemplateLogic
+        .hasMixedAvailability(seatId, routeBuses);
+
+      if (hasMixed) {
+        _showSeatTypeChooser(seatId);
+        return;
+      }
+    }
+
+    // No mixed availability — select normally
+    HapticFeedback.lightImpact();
+    setState(() {
+      allSelectedSeats[activeTemplate]!.add(seatId);
+    });
+  }
+
   void _toggleSeat(String seatId) {
     HapticFeedback.lightImpact();
     setState(() {
@@ -138,6 +212,242 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
         list.add(seatId);
       }
     });
+  }
+
+  void _showSeatTypeChooser(String seatId) {
+    final womenBuses = UniversalTemplateLogic
+      .getWomenOnlyBuses(seatId, routeBuses);
+    final generalBuses = UniversalTemplateLogic
+      .getGeneralBuses(seatId, routeBuses)
+      .where((b) =>
+        b.availableSeats.contains(seatId))
+      .toList();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(20),
+        ),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          20, 20, 20,
+          MediaQuery.of(ctx).padding.bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment:
+            CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 40, height: 4,
+              margin: const EdgeInsets.only(
+                bottom: 16,
+              ),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE2E8F0),
+                borderRadius:
+                  BorderRadius.circular(2),
+              ),
+            ),
+            Text(
+              'Seat $seatId — Choose type',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF1E293B),
+                fontFamily: GoogleFonts.poppins()
+                  .fontFamily,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'This seat position has both '
+              'women-only and general options',
+              style: TextStyle(
+                fontSize: 12,
+                color: const Color(0xFF64748B),
+                fontFamily: GoogleFonts.poppins()
+                  .fontFamily,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Women only option
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.mediumImpact();
+                Navigator.pop(ctx);
+                setState(() {
+                  allSelectedSeats['Seater']!
+                    .add(seatId);
+                  seatTypePreference[seatId] =
+                    'women';
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(
+                  bottom: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFDF2F8),
+                  borderRadius:
+                    BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFFEC4899),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(
+                        color: const Color(
+                          0xFFEC4899,
+                        ),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.female,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Women Only',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight:
+                                FontWeight.w700,
+                              color: const Color(
+                                0xFFBE185D,
+                              ),
+                              fontFamily:
+                                GoogleFonts.poppins()
+                                .fontFamily,
+                            ),
+                          ),
+                          Text(
+                            '${womenBuses.length} '
+                            'bus(es) available',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: const Color(
+                                0xFF64748B,
+                              ),
+                              fontFamily:
+                                GoogleFonts.poppins()
+                                .fontFamily,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right,
+                      color: Color(0xFFEC4899),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // General option
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.mediumImpact();
+                Navigator.pop(ctx);
+                setState(() {
+                  allSelectedSeats['Seater']!
+                    .add(seatId);
+                  seatTypePreference[seatId] =
+                    'general';
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius:
+                    BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFF1A56DB),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(
+                        color: const Color(
+                          0xFF1A56DB,
+                        ),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.person,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'General',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight:
+                                FontWeight.w700,
+                              color: const Color(
+                                0xFF1A56DB,
+                              ),
+                              fontFamily:
+                                GoogleFonts.poppins()
+                                .fontFamily,
+                            ),
+                          ),
+                          Text(
+                            '${generalBuses.length} '
+                            'bus(es) available',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: const Color(
+                                0xFF64748B,
+                              ),
+                              fontFamily:
+                                GoogleFonts.poppins()
+                                .fontFamily,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right,
+                      color: Color(0xFF1A56DB),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   TextStyle _poppins({
@@ -157,63 +467,149 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
   void _onFindBuses() {
   HapticFeedback.mediumImpact();
 
-  if (templateData == null) return;
+  if (isPositionMode) {
+    // Existing position mode logic
+    final allSeats = allSelectedSeatsList;
+    if (allSeats.isEmpty) return;
 
-  final allSeats = allSelectedSeatsList;
-  if (allSeats.isEmpty) return;
+    List<BusModel> _getEligibleBusesForSeats(
+      List<String> seats,
+    ) {
+      List<BusModel> eligible = routeBuses;
 
-  // Try exact match first
-  final exactMatches = routeBuses.where((bus) =>
-    allSeats.every((seat) =>
-      bus.availableSeats.contains(seat)
-    )
-  ).toList();
+      for (final seat in seats) {
+        final pref = seatTypePreference[seat];
+        if (pref == 'women') {
+          eligible = eligible.where((bus) =>
+            bus.womenOnlySeats.contains(seat)
+          ).toList();
+        } else if (pref == 'general') {
+          eligible = eligible.where((bus) =>
+            !bus.womenOnlySeats.contains(seat)
+          ).toList();
+        }
+      }
+      return eligible;
+    }
 
-  // Navigate to smart suggestion screen
-  // with all data it needs
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => SmartSuggestionScreen(
-        from: widget.from,
-        to: widget.to,
-        date: widget.date,
-        timeSlot: widget.timeSlot,
-        selectedSeats: allSeats,
-        seaterSeats:
-          allSelectedSeats['Seater']!,
-        lowerSeats:
-          allSelectedSeats['Lower']!,
-        upperSeats:
-          allSelectedSeats['Upper']!,
-        exactMatches: exactMatches,
-        allRouteBuses: routeBuses,
-        templateData: templateData!,
+    final eligibleBuses = _getEligibleBusesForSeats(allSeats);
+
+    final exactMatches = eligibleBuses.where((bus) =>
+      allSeats.every((seat) =>
+        bus.availableSeats.contains(seat)
+      )
+    ).toList();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SmartSuggestionScreen(
+          from: widget.from,
+          to: widget.to,
+          date: _currentDate,
+          timeSlot: widget.timeSlot,
+          selectedSeats: allSeats,
+          seaterSeats: allSelectedSeats['Seater']!,
+          lowerSeats: allSelectedSeats['Lower']!,
+          upperSeats: allSelectedSeats['Upper']!,
+          exactMatches: exactMatches,
+          allRouteBuses: routeBuses,
+          templateData: templateData!,
+        ),
       ),
-    ),
-  ).then((result) {
-    // Handle seat replacement from suggestion
-    if (result != null && result is Map) {
-      final replaceSeat = result['replaceSeat'] as String?;
-      final withSeat = result['withSeat'] as String?;
+    ).then((result) {
+      // Handle result from smart suggestion screen
+      if (result != null && result is Map) {
+        // Handle date change
+        final changeDate = result['changeDate'] as bool?;
+        final newDate = result['newDate'] as String?;
 
-      if (replaceSeat != null && withSeat != null) {
-        // Determine which template the seat belongs to
-        String template = 'Seater';
-        if (replaceSeat.startsWith('L')) {
-          template = 'Lower';
-        } else if (replaceSeat.startsWith('U')) {
-          template = 'Upper';
+        if (changeDate == true && newDate != null) {
+          // Update the date and refresh the screen
+          setState(() {
+            _currentDate = newDate;
+          });
+          // Reload template data for new date
+          _loadTemplateData();
+          return;
         }
 
-        setState(() {
-          // Remove the old seat and add the new one
-          allSelectedSeats[template]!.remove(replaceSeat);
-          allSelectedSeats[template]!.add(withSeat);
-        });
+        // Handle seat replacement from suggestion
+        final replaceSeat = result['replaceSeat'] as String?;
+        final withSeat = result['withSeat'] as String?;
+
+        if (replaceSeat != null && withSeat != null) {
+          // Determine which template the seat belongs to
+          String template = 'Seater';
+          if (replaceSeat.startsWith('L')) {
+            template = 'Lower';
+          } else if (replaceSeat.startsWith('U')) {
+            template = 'Upper';
+          }
+
+          setState(() {
+            // Remove the old seat and add the new one
+            allSelectedSeats[template]!.remove(replaceSeat);
+            allSelectedSeats[template]!.add(withSeat);
+          });
+        }
       }
-    }
-  });
+    });
+  } else {
+    // Count mode logic
+    if (totalCountModeSeats == 0) return;
+
+    final matchingBuses = routeBuses.where((bus) {
+      bool matches = true;
+
+      if ((templateCounts['Seater'] ?? 0) > 0) {
+        final avail = bus.availableSeats
+          .where((s) => UniversalTemplateLogic
+            .isSeaterSeat(s))
+          .length;
+        if (avail < templateCounts['Seater']!) {
+          matches = false;
+        }
+      }
+      if ((templateCounts['Lower'] ?? 0) > 0) {
+        final avail = bus.availableSeats
+          .where((s) => UniversalTemplateLogic
+            .isLowerBerth(s))
+          .length;
+        if (avail < templateCounts['Lower']!) {
+          matches = false;
+        }
+      }
+      if ((templateCounts['Upper'] ?? 0) > 0) {
+        final avail = bus.availableSeats
+          .where((s) => UniversalTemplateLogic
+            .isUpperBerth(s))
+          .length;
+        if (avail < templateCounts['Upper']!) {
+          matches = false;
+        }
+      }
+
+      return matches;
+    }).toList();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BusListScreen(
+          from: widget.from,
+          to: widget.to,
+          date: _currentDate,
+          timeSlot: widget.timeSlot,
+          layout: 'Mixed',
+          mode: 'Count',
+          selectedSeats: [],
+          seatCount: totalCountModeSeats,
+          buses: matchingBuses,
+        ),
+      ),
+    );
+  }
 }
 
   @override
@@ -267,7 +663,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${widget.date} · ${widget.timeSlot}',
+                  '$_currentDate · ${widget.timeSlot}',
                   style: _poppins(
                     fontSize: 11,
                     color: _kBlueLightBorder,
@@ -315,12 +711,82 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Select your preferred seat',
-            style: _poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Select your preferred seat',
+                style: _poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              // Mode toggle
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: () => _onModeToggle(true),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isPositionMode
+                            ? _kBrandBlue
+                            : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Position',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: isPositionMode
+                              ? Colors.white
+                              : const Color(0xFF64748B),
+                            fontFamily: GoogleFonts.poppins()
+                              .fontFamily,
+                          ),
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => _onModeToggle(false),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: !isPositionMode
+                            ? _kBrandBlue
+                            : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Count',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: !isPositionMode
+                              ? Colors.white
+                              : const Color(0xFF64748B),
+                            fontFamily: GoogleFonts.poppins()
+                              .fontFamily,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           Center(
@@ -545,9 +1011,325 @@ Widget _templateTab(
   // ─── Section 4: Seat Area ─────────────────────────────────────────────────
 
   Widget _buildSeatArea() {
+    if (isPositionMode) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: _buildSeatGrid(),
+      );
+    } else {
+      return _buildCountModeBody();
+    }
+  }
+
+  Widget _buildCountModeBody() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: _buildSeatGrid(),
+      padding: const EdgeInsets.fromLTRB(
+        16, 16, 16, 16,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+          Text(
+            'How many seats do you need?',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF1E293B),
+              fontFamily: GoogleFonts.poppins()
+                .fontFamily,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Set count for each seat type you need',
+            style: TextStyle(
+              fontSize: 11,
+              color: const Color(0xFF64748B),
+              fontFamily: GoogleFonts.poppins()
+                .fontFamily,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          _countCard(
+            label: 'Seater',
+            subtitle: 'Regular seat (2+2)',
+            icon: Icons.airline_seat_recline_normal,
+            color: const Color(0xFF1A56DB),
+            template: 'Seater',
+          ),
+          const SizedBox(height: 12),
+
+          _countCard(
+            label: 'Lower Berth',
+            subtitle: 'Sleeper - bottom deck',
+            icon: Icons.bed_outlined,
+            color: const Color(0xFF16A34A),
+            template: 'Lower',
+          ),
+          const SizedBox(height: 12),
+
+          _countCard(
+            label: 'Upper Berth',
+            subtitle: 'Sleeper - top deck',
+            icon: Icons.airline_seat_flat,
+            color: const Color(0xFF7C3AED),
+            template: 'Upper',
+          ),
+
+          const SizedBox(height: 20),
+
+          // Live availability preview
+          if (totalCountModeSeats > 0)
+            _buildAvailabilityPreview(),
+        ],
+      ),
+    );
+  }
+
+  Widget _countCard({
+    required String label,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required String template,
+  }) {
+    final count = templateCounts[template] ?? 0;
+    final isActive = count > 0;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isActive
+            ? color
+            : const Color(0xFFE2E8F0),
+          width: isActive ? 1.5 : 1,
+        ),
+        boxShadow: isActive
+          ? [
+              BoxShadow(
+                color: color.withOpacity(0.15),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ]
+          : [],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment:
+                CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF1E293B),
+                    fontFamily: GoogleFonts.poppins()
+                      .fontFamily,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: const Color(0xFF94A3B8),
+                    fontFamily: GoogleFonts.poppins()
+                      .fontFamily,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Minus button
+          GestureDetector(
+            onTap: count > 0
+              ? () {
+                  HapticFeedback.lightImpact();
+                  setState(() {
+                    templateCounts[template] =
+                      count - 1;
+                  });
+                }
+              : null,
+            child: Container(
+              width: 32, height: 32,
+              decoration: BoxDecoration(
+                color: count > 0
+                  ? color.withOpacity(0.1)
+                  : const Color(0xFFF8FAFC),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: count > 0
+                    ? color
+                    : const Color(0xFFE2E8F0),
+                ),
+              ),
+              child: Icon(
+                Icons.remove,
+                size: 14,
+                color: count > 0
+                  ? color
+                  : const Color(0xFF94A3B8),
+              ),
+            ),
+          ),
+
+          SizedBox(
+            width: 36,
+            child: Text(
+              '$count',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: isActive
+                  ? color
+                  : const Color(0xFF94A3B8),
+                fontFamily: GoogleFonts.poppins()
+                  .fontFamily,
+              ),
+            ),
+          ),
+
+          // Plus button
+          GestureDetector(
+            onTap: count < 10
+              ? () {
+                  HapticFeedback.lightImpact();
+                  setState(() {
+                    templateCounts[template] =
+                      count + 1;
+                  });
+                }
+              : null,
+            child: Container(
+              width: 32, height: 32,
+              decoration: BoxDecoration(
+                color: count < 10
+                  ? color
+                  : const Color(0xFFF8FAFC),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: count < 10
+                    ? color
+                    : const Color(0xFFE2E8F0),
+                ),
+              ),
+              child: Icon(
+                Icons.add,
+                size: 14,
+                color: count < 10
+                  ? Colors.white
+                  : const Color(0xFF94A3B8),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAvailabilityPreview() {
+    if (templateData == null) return const SizedBox();
+
+    // Count buses matching ALL requested counts
+    final matchingBuses = routeBuses.where((bus) {
+      bool matches = true;
+
+      if ((templateCounts['Seater'] ?? 0) > 0) {
+        final seaterAvail = bus.availableSeats
+          .where((s) =>
+            UniversalTemplateLogic.isSeaterSeat(s))
+          .length;
+        if (seaterAvail < templateCounts['Seater']!) {
+          matches = false;
+        }
+      }
+      if ((templateCounts['Lower'] ?? 0) > 0) {
+        final lowerAvail = bus.availableSeats
+          .where((s) =>
+            UniversalTemplateLogic.isLowerBerth(s))
+          .length;
+        if (lowerAvail < templateCounts['Lower']!) {
+          matches = false;
+        }
+      }
+      if ((templateCounts['Upper'] ?? 0) > 0) {
+        final upperAvail = bus.availableSeats
+          .where((s) =>
+            UniversalTemplateLogic.isUpperBerth(s))
+          .length;
+        if (upperAvail < templateCounts['Upper']!) {
+          matches = false;
+        }
+      }
+
+      return matches;
+    }).length;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: matchingBuses > 0
+          ? const Color(0xFFF0FDF4)
+          : const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: matchingBuses > 0
+            ? const Color(0xFFBBF7D0)
+            : const Color(0xFFFCA5A5),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            matchingBuses > 0
+              ? Icons.check_circle
+              : Icons.info_outline,
+            color: matchingBuses > 0
+              ? const Color(0xFF16A34A)
+              : const Color(0xFFEF4444),
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              matchingBuses > 0
+                ? '$matchingBuses bus(es) match '
+                  'your requirement'
+                : 'No buses match this combination '
+                  'yet — try adjusting counts',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: matchingBuses > 0
+                  ? const Color(0xFF16A34A)
+                  : const Color(0xFFEF4444),
+                fontFamily: GoogleFonts.poppins()
+                  .fontFamily,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -677,28 +1459,37 @@ Widget _templateTab(
         // Front header
         _buildBusFrontHeader(),
 
-        // Column headers
-        _buildColumnHeaders(
-          seatW, isBerth,
-        ),
-
-        // Seat rows
-        Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 8, vertical: 4,
-          ),
+        // Scrollable seat area
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
           child: Column(
-            children: List.generate(
-              rowCount, (idx) {
-              final row = idx + 1;
-              return _buildTopViewRow(
-                row: row,
-                seatW: seatW,
-                seatH: seatH,
-                rowH: rowH,
-                isBerth: isBerth,
-              );
-            }),
+            children: [
+              // Column headers
+              _buildColumnHeaders(
+                seatW, isBerth,
+              ),
+
+              // Seat rows
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 4,
+                ),
+                child: Column(
+                  children: List.generate(
+                    rowCount, (idx) {
+                    final row = idx + 1;
+                    return _buildTopViewRow(
+                      row: row,
+                      seatW: seatW,
+                      seatH: seatH,
+                      rowH: rowH,
+                      isBerth: isBerth,
+                    );
+                  }),
+                ),
+              ),
+            ],
           ),
         ),
 
@@ -726,12 +1517,14 @@ Widget _templateTab(
       children: [
         const SizedBox(width: 20),
         // Left 2 columns
-        Expanded(
+        SizedBox(
+          width: seatW * 2 + 8,
           child: Row(
             mainAxisAlignment:
               MainAxisAlignment.spaceEvenly,
             children: [
               _colHeader(cols[0], seatW),
+              const SizedBox(width: 8),
               _colHeader(cols[1], seatW),
             ],
           ),
@@ -739,12 +1532,14 @@ Widget _templateTab(
         // Aisle
         const SizedBox(width: 20),
         // Right 2 columns
-        Expanded(
+        SizedBox(
+          width: seatW * 2 + 8,
           child: Row(
             mainAxisAlignment:
               MainAxisAlignment.spaceEvenly,
             children: [
               _colHeader(cols[2], seatW),
+              const SizedBox(width: 8),
               _colHeader(cols[3], seatW),
             ],
           ),
@@ -773,7 +1568,7 @@ Widget _colHeader(String col, double seatW) {
   );
 }
 
-Widget _buildTopViewRow({
+  Widget _buildTopViewRow({
   required int row,
   required double seatW,
   required double seatH,
@@ -816,59 +1611,61 @@ Widget _buildTopViewRow({
 
         const SizedBox(width: 4),
 
-        // Left 2 seats/berths
-        Expanded(
-          child: Row(
-            mainAxisAlignment:
-              MainAxisAlignment.spaceEvenly,
-            children: [
-              isBerth
-                ? _buildTopViewBerth(
-                    _id('A'), seatW, seatH)
-                : _buildTopViewSeat(
-                    _id('A'), seatW, seatH),
-              isBerth
-                ? _buildTopViewBerth(
-                    _id('B'), seatW, seatH)
-                : _buildTopViewSeat(
-                    _id('B'), seatW, seatH),
-            ],
-          ),
-        ),
-
-        // Center aisle yellow line
+        // Seat content with fixed width
         SizedBox(
-          width: 20,
-          child: Center(
-            child: Container(
-              width: 3,
-              height: rowH * 0.75,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF59E0B)
-                  .withOpacity(0.7),
-                borderRadius:
-                  BorderRadius.circular(2),
-              ),
-            ),
-          ),
-        ),
-
-        // Right 2 seats/berths
-        Expanded(
+          width: seatW * 4 + 48, // 4 seats + spacing + aisle
           child: Row(
-            mainAxisAlignment:
-              MainAxisAlignment.spaceEvenly,
             children: [
-              isBerth
-                ? _buildTopViewBerth(
-                    _id('C'), seatW, seatH)
-                : _buildTopViewSeat(
-                    _id('C'), seatW, seatH),
-              isBerth
-                ? _buildTopViewBerth(
-                    _id('D'), seatW, seatH)
-                : _buildTopViewSeat(
-                    _id('D'), seatW, seatH),
+              // Left 2 seats/berths
+              Row(
+                children: [
+                  isBerth
+                    ? _buildTopViewBerth(
+                        _id('A'), seatW, seatH)
+                    : _buildTopViewSeat(
+                        _id('A'), seatW, seatH),
+                  const SizedBox(width: 8),
+                  isBerth
+                    ? _buildTopViewBerth(
+                        _id('B'), seatW, seatH)
+                    : _buildTopViewSeat(
+                        _id('B'), seatW, seatH),
+                ],
+              ),
+
+              // Center aisle yellow line
+              SizedBox(
+                width: 20,
+                child: Center(
+                  child: Container(
+                    width: 3,
+                    height: rowH * 0.75,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B)
+                        .withOpacity(0.7),
+                      borderRadius:
+                        BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Right 2 seats/berths
+              Row(
+                children: [
+                  isBerth
+                    ? _buildTopViewBerth(
+                        _id('C'), seatW, seatH)
+                    : _buildTopViewSeat(
+                        _id('C'), seatW, seatH),
+                  const SizedBox(width: 8),
+                  isBerth
+                    ? _buildTopViewBerth(
+                        _id('D'), seatW, seatH)
+                    : _buildTopViewSeat(
+                        _id('D'), seatW, seatH),
+                ],
+              ),
             ],
           ),
         ),
@@ -907,6 +1704,20 @@ Widget _buildTopViewSeat(
     activeTemplate]!.contains(seatId);
   final isAvailable = count > 0;
 
+  final seaterBusesForThisSeat = routeBuses
+    .where((b) => b.layout != 'Lower' &&
+      b.layout != 'Upper' &&
+      b.availableSeats.contains(seatId))
+    .toList();
+
+  final hasWomenOnly = UniversalTemplateLogic
+    .getWomenOnlyBuses(
+      seatId,
+      activeTemplate == 'Seater'
+        ? routeBuses
+        : [], // only Seater template shows this
+    ).isNotEmpty;
+
   final Color seatColor = isSelected
     ? const Color(0xFF1A56DB)
     : count >= 3
@@ -917,67 +1728,92 @@ Widget _buildTopViewSeat(
 
   return GestureDetector(
     onTap: isAvailable
-      ? () => _toggleSeat(seatId)
+      ? () => _onSeatTap(seatId)
       : null,
     child: SizedBox(
       width: seatW,
       height: seatH,
-      child: CustomPaint(
-        painter: TopViewSeatPainter(
-          color: seatColor,
-          isSelected: isSelected,
-          isAvailable: isAvailable,
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment:
-              MainAxisAlignment.center,
-            children: [
-              Text(
-                seatId,
-                style: TextStyle(
-                  color: isSelected
-                    ? Colors.white
-                    : isAvailable
-                        ? Colors.white
-                        : const Color(0xFF64748B),
-                  fontSize: seatW * 0.17,
-                  fontWeight: FontWeight.w800,
-                  fontFamily:
-                    GoogleFonts.poppins()
-                    .fontFamily,
-                ),
-              ),
-              if (count > 0)
-                Container(
-                  margin: const EdgeInsets
-                    .only(top: 2),
-                  padding:
-                    const EdgeInsets.symmetric(
-                      horizontal: 3,
-                      vertical: 1,
-                    ),
-                  decoration: BoxDecoration(
-                    color: Colors.white
-                      .withOpacity(0.25),
-                    borderRadius:
-                      BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    '$count',
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          CustomPaint(
+            painter: TopViewSeatPainter(
+              color: seatColor,
+              isSelected: isSelected,
+              isAvailable: isAvailable,
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment:
+                  MainAxisAlignment.center,
+                children: [
+                  Text(
+                    seatId,
                     style: TextStyle(
-                      color: Colors.white,
-                      fontSize: seatW * 0.13,
-                      fontWeight: FontWeight.w700,
+                      color: isSelected
+                        ? Colors.white
+                        : isAvailable
+                            ? Colors.white
+                            : const Color(0xFF64748B),
+                      fontSize: seatW * 0.17,
+                      fontWeight: FontWeight.w800,
                       fontFamily:
                         GoogleFonts.poppins()
                         .fontFamily,
                     ),
                   ),
-                ),
-            ],
+                  if (count > 0)
+                    Container(
+                      margin: const EdgeInsets
+                        .only(top: 2),
+                      padding:
+                        const EdgeInsets.symmetric(
+                          horizontal: 3,
+                          vertical: 1,
+                        ),
+                      decoration: BoxDecoration(
+                        color: Colors.white
+                          .withOpacity(0.25),
+                        borderRadius:
+                          BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '$count',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: seatW * 0.13,
+                          fontWeight: FontWeight.w700,
+                          fontFamily:
+                            GoogleFonts.poppins()
+                            .fontFamily,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
-        ),
+          if (hasWomenOnly && count > 0)
+            Positioned(
+              top: -2,
+              right: -2,
+              child: Container(
+                width: 14, height: 14,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEC4899),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white, width: 1.5,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.female,
+                  size: 9,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+        ],
       ),
     ),
   );
@@ -1188,7 +2024,9 @@ Widget _buildBusRearFooter() {
   // ─── Section 6: Bottom Actions ────────────────────────────────────────────
 
   Widget _buildBottomAction() {
-  final hasSelections = totalSelected > 0;
+  final hasSelections = isPositionMode
+    ? totalSelected > 0
+    : totalCountModeSeats > 0;
 
   return AnimatedContainer(
     duration: const Duration(
@@ -1217,8 +2055,8 @@ Widget _buildBusRearFooter() {
       mainAxisSize: MainAxisSize.min,
       children: [
 
-        // Cross-template selection summary
-        if (hasSelections) ...[
+        // Position mode: Cross-template selection summary
+        if (isPositionMode && hasSelections) ...[
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(10),
@@ -1246,7 +2084,7 @@ Widget _buildBusRearFooter() {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'Selected across templates:',
+                      'Selected seats:',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -1320,6 +2158,41 @@ Widget _buildBusRearFooter() {
           ),
         ],
 
+        // Count mode: Summary row
+        if (!isPositionMode && hasSelections)
+          Container(
+            padding: const EdgeInsets.all(10),
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: const Color(0xFFBFDBFE),
+              ),
+            ),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                if ((templateCounts['Seater'] ?? 0) > 0)
+                  _countSummaryChip(
+                    '${templateCounts['Seater']} Seater',
+                    const Color(0xFF1A56DB),
+                  ),
+                if ((templateCounts['Lower'] ?? 0) > 0)
+                  _countSummaryChip(
+                    '${templateCounts['Lower']} Lower',
+                    const Color(0xFF16A34A),
+                  ),
+                if ((templateCounts['Upper'] ?? 0) > 0)
+                  _countSummaryChip(
+                    '${templateCounts['Upper']} Upper',
+                    const Color(0xFF7C3AED),
+                  ),
+              ],
+            ),
+          ),
+
         // Find Buses button
         SizedBox(
           width: double.infinity,
@@ -1351,7 +2224,13 @@ Widget _buildBusRearFooter() {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Find Buses',
+                  hasSelections
+                    ? isPositionMode
+                      ? 'Find Buses · $totalSelected seat(s) →'
+                      : 'Find Buses · $totalCountModeSeats seat(s) →'
+                    : isPositionMode
+                      ? 'Select seats above'
+                      : 'Set seat counts above',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -1419,6 +2298,31 @@ Widget _selectionChip(
           ),
         ),
       ],
+    ),
+  );
+}
+
+Widget _countSummaryChip(String text, Color color) {
+  return Container(
+    padding: const EdgeInsets.symmetric(
+      horizontal: 10, vertical: 5,
+    ),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(
+        color: color.withOpacity(0.4),
+      ),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        color: color,
+        fontFamily: GoogleFonts.poppins()
+          .fontFamily,
+      ),
     ),
   );
 }
@@ -2454,6 +3358,54 @@ class UniversalTemplateLogic {
       seaterBusMap:  seaterMap,
       lowerBusMap:   lowerMap,
       upperBusMap:   upperMap,
+    );
+  }
+
+  // Returns buses from a list that have
+  // this seat marked women-only
+  static List<BusModel> getWomenOnlyBuses(
+    String seatId,
+    List<BusModel> buses,
+  ) {
+    return buses.where((bus) =>
+      bus.womenOnlySeats.contains(seatId)
+    ).toList();
+  }
+
+  // Returns buses from a list that have
+  // this seat as general (not women-only)
+  static List<BusModel> getGeneralBuses(
+    String seatId,
+    List<BusModel> buses,
+  ) {
+    return buses.where((bus) =>
+      !bus.womenOnlySeats.contains(seatId)
+    ).toList();
+  }
+
+  // Check if a seat has mixed availability
+  // (some women-only, some general)
+  static bool hasMixedAvailability(
+    String seatId,
+    List<BusModel> buses,
+  ) {
+    final women = getWomenOnlyBuses(seatId, buses);
+    final general = getGeneralBuses(seatId, buses);
+    return women.isNotEmpty && general.isNotEmpty;
+  }
+
+  // Check if seat is women-only across ALL
+  // buses that have it (no general option)
+  static bool isFullyWomenOnly(
+    String seatId,
+    List<BusModel> buses,
+  ) {
+    final relevant = buses.where((bus) =>
+      bus.availableSeats.contains(seatId)
+    ).toList();
+    if (relevant.isEmpty) return false;
+    return relevant.every((bus) =>
+      bus.womenOnlySeats.contains(seatId)
     );
   }
 }

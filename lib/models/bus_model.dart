@@ -13,6 +13,7 @@ class BusModel {
   final Map<String, int> platforms;
   final String busType;
   final List<String> amenities;
+  final List<String> womenOnlySeats;
 
   BusModel({
     required this.id,
@@ -29,6 +30,7 @@ class BusModel {
     required this.platforms,
     required this.busType,
     required this.amenities,
+    this.womenOnlySeats = const [],
   });
 
   factory BusModel.fromJson(Map<String, dynamic> json) {
@@ -47,6 +49,9 @@ class BusModel {
       platforms: Map<String, int>.from(json['platforms']),
       busType: json['busType'] as String,
       amenities: List<String>.from(json['amenities']),
+      womenOnlySeats: json['womenOnlySeats'] != null
+        ? List<String>.from(json['womenOnlySeats'])
+        : [],
     );
   }
 
@@ -65,5 +70,6 @@ class BusModel {
         'platforms': platforms,
         'busType': busType,
         'amenities': amenities,
+        'womenOnlySeats': womenOnlySeats,
       };
 }

@@ -264,7 +264,7 @@ class _PlatformScreenState extends State<PlatformScreen> {
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
-                      'Save ₹$savings vs most expensive',
+                      'You Saved ₹$savings',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 14,
@@ -340,6 +340,16 @@ class _PlatformScreenState extends State<PlatformScreen> {
             ],
           ),
           const SizedBox(height: 8),
+          // Amenity icons
+          if (widget.bus.amenities.isNotEmpty)
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: widget.bus.amenities.map((amenity) {
+                return _amenityIcon(amenity, p.textSecondary);
+              }).toList(),
+            ),
+          const SizedBox(height: 8),
           Row(
             children: [
               _badge(widget.bus.layout),
@@ -385,6 +395,60 @@ class _PlatformScreenState extends State<PlatformScreen> {
         text,
         style: TextStyle(fontSize: 11, color: p.textSecondary),
       ),
+    );
+  }
+
+  Widget _amenityIcon(String amenity, Color color) {
+    IconData icon;
+    String label;
+    
+    switch (amenity.toLowerCase()) {
+      case 'ac':
+        icon = Icons.ac_unit;
+        label = 'AC';
+        break;
+      case 'wifi':
+        icon = Icons.wifi;
+        label = 'WiFi';
+        break;
+      case 'charging':
+        icon = Icons.power;
+        label = 'Charging';
+        break;
+      case 'water':
+        icon = Icons.water_drop;
+        label = 'Water';
+        break;
+      case 'blanket':
+        icon = Icons.bed;
+        label = 'Blanket';
+        break;
+      case 'pillow':
+        icon = Icons.airline_seat_flat;
+        label = 'Pillow';
+        break;
+      default:
+        icon = Icons.check_circle;
+        label = amenity;
+    }
+    
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          icon,
+          size: 14,
+          color: color,
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 }

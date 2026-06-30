@@ -46,7 +46,6 @@ class _SmartSuggestionScreenState
   List<Map<String, dynamic>> nearbyMatches = [];
   List<Map<String, dynamic>> zoneMatches = [];
   List<Map<String, dynamic>> splitOptions = [];
-  List<Map<String, dynamic>> dateOptions = [];
 
   bool isLoading = true;
 
@@ -80,9 +79,6 @@ class _SmartSuggestionScreenState
 
       // Layer 4: Split bus options
       splitOptions = _buildSplitOptions();
-
-      // Layer 5: Date alternatives
-      dateOptions = _buildDateOptions();
 
       isLoading = false;
     });
@@ -311,67 +307,6 @@ class _SmartSuggestionScreenState
     return DateTime(
       now.year, now.month, now.day, hour, minute,
     );
-  }
-
-  // ── LAYER 5: DATE OPTIONS ──────────────────────
-  List<Map<String, dynamic>> _buildDateOptions() {
-    if (exactMatches.isNotEmpty) return [];
-
-    final results = <Map<String, dynamic>>[];
-    final months = [
-      'Jan','Feb','Mar','Apr','May','Jun',
-      'Jul','Aug','Sep','Oct','Nov','Dec',
-    ];
-
-    // Parse current date from string (assume format like "Jan 15, 2026")
-    final now = DateTime.now();
-    final baseDate = now; // Use current date as base
-
-    // Check next 5 days
-    for (int dayOffset = 1; dayOffset <= 5; dayOffset++) {
-      final checkDate = baseDate.add(
-        Duration(days: dayOffset),
-      );
-
-      // Simulate different availability per day
-      // (with real API this would be actual data)
-      final seed = dayOffset * 7;
-      final simulatedAvailable =
-        widget.selectedSeats.where((seat) {
-        return (seat.hashCode + seed) % 3 != 0;
-      }).length;
-
-      final allAvailable =
-        simulatedAvailable ==
-        widget.selectedSeats.length;
-
-      final dateStr =
-        '${months[checkDate.month - 1]} '
-        '${checkDate.day}';
-
-      // Simulate price variation
-      final basePrice = widget.allRouteBuses
-        .isNotEmpty
-        ? widget.allRouteBuses.first.price
-        : 500;
-      final priceVar = (dayOffset - 1) * 35;
-      final dayPrice = basePrice + priceVar;
-
-      results.add({
-        'date': checkDate,
-        'dateStr': dateStr,
-        'dayOffset': dayOffset,
-        'allAvailable': allAvailable,
-        'availableCount': simulatedAvailable,
-        'totalNeeded':
-          widget.selectedSeats.length,
-        'estimatedPrice': dayPrice,
-        'busCount': allAvailable
-          ? 3 + dayOffset : 0,
-      });
-    }
-
-    return results;
   }
 
   // ── BUILD UI ───────────────────────────────────
@@ -800,17 +735,6 @@ class _SmartSuggestionScreenState
             const SizedBox(height: 16),
           ],
 
-          // ── LAYER 5: DATE OPTIONS ──────────────
-          if (exactMatches.isEmpty && zoneMatches.isEmpty) ...[
-            _sectionHeader(
-              'Try Different Date',
-              'Prices and availability by day',
-              const Color(0xFF0891B2),
-            ),
-            _buildDateCalendar(),
-            const SizedBox(height: 16),
-          ],
-
           // ── NO RESULTS MESSAGE ─────────────────
           if (exactMatches.isEmpty &&
               nearbyMatches.isEmpty &&
@@ -981,6 +905,44 @@ class _SmartSuggestionScreenState
                       ),
                     ),
                   ),
+                  if (bus.womenOnlySeats.any((s) =>
+                      widget.selectedSeats.contains(s)))
+                    Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFDF2F8),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: const Color(0xFFEC4899),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.female,
+                              size: 10,
+                              color: Color(0xFFEC4899),
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              'Women Seat',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFFBE185D),
+                                fontFamily: GoogleFonts.poppins()
+                                  .fontFamily,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ],
@@ -1226,94 +1188,126 @@ class _SmartSuggestionScreenState
         crossAxisAlignment:
           CrossAxisAlignment.start,
         children: [
-          // Suggestion text
+          // Suggestion text with button on right
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding:
-                  const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3,
-                  ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
-                  borderRadius:
-                    BorderRadius.circular(20),
+              // Left side: bus count badge + seat change
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding:
+                        const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3,
+                        ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius:
+                          BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '$busCount buses available',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF1A56DB),
+                          fontFamily:
+                            GoogleFonts.poppins()
+                              .fontFamily,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Flexible(
+                      child: RichText(
+                        text: TextSpan(
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontFamily: GoogleFonts.poppins()
+                              .fontFamily,
+                            color: const Color(0xFF1E293B),
+                          ),
+                          children: [
+                            const TextSpan(
+                              text: 'Change ',
+                            ),
+                            TextSpan(
+                              text: original,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFFEF4444),
+                                decoration:
+                                  TextDecoration.lineThrough,
+                              ),
+                            ),
+                            const TextSpan(text: ' → '),
+                            TextSpan(
+                              text: suggested,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF16A34A),
+                              ),
+                            ),
+                          ],
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
-                child: Text(
-                  '$busCount buses available',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
+              ),
+              const SizedBox(width: 8),
+              // Right side: round blue button
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.pop(context, {
+                    'replaceSeat': original,
+                    'withSeat': suggested,
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
                     color: const Color(0xFF1A56DB),
-                    fontFamily:
-                      GoogleFonts.poppins()
-                      .fontFamily,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Use',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          fontFamily: GoogleFonts.poppins()
+                            .fontFamily,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      const Icon(
+                        Icons.arrow_forward,
+                        size: 12,
+                        color: Colors.white,
+                      ),
+                    ],
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          RichText(
-            text: TextSpan(
-              style: TextStyle(
-                fontSize: 13,
-                fontFamily: GoogleFonts.poppins()
-                  .fontFamily,
-                color: const Color(0xFF1E293B),
-              ),
-              children: [
-                const TextSpan(
-                  text: 'Change ',
-                ),
-                TextSpan(
-                  text: original,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFFEF4444),
-                    decoration:
-                      TextDecoration.lineThrough,
-                  ),
-                ),
-                const TextSpan(text: ' → '),
-                TextSpan(
-                  text: suggested,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF16A34A),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
           
           // Show full bus card if buses available
           if (firstBus != null)
             _nearbyBusCard(firstBus, newSeats),
-          
-          const SizedBox(height: 8),
-          
-          // Use this seat combination link
-          GestureDetector(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              Navigator.pop(context, {
-                'replaceSeat': original,
-                'withSeat': suggested,
-              });
-            },
-            child: Text(
-              'Use this seat combination →',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF1A56DB),
-                fontFamily: GoogleFonts.poppins()
-                  .fontFamily,
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -1658,6 +1652,44 @@ class _SmartSuggestionScreenState
                       ),
                     ),
                   ),
+                  if (bus.womenOnlySeats.any((s) =>
+                      widget.selectedSeats.contains(s)))
+                    Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFDF2F8),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: const Color(0xFFEC4899),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.female,
+                              size: 10,
+                              color: Color(0xFFEC4899),
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              'Women Seat',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFFBE185D),
+                                fontFamily: GoogleFonts.poppins()
+                                  .fontFamily,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ],
@@ -2199,119 +2231,6 @@ class _SmartSuggestionScreenState
           ),
         ),
       ],
-    );
-  }
-
-  // Date calendar widget
-  Widget _buildDateCalendar() {
-    return SizedBox(
-      height: 100,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: dateOptions.length,
-        itemBuilder: (_, i) {
-          final d = dateOptions[i];
-          final available =
-            d['allAvailable'] as bool;
-          final busCount = d['busCount'] as int;
-          final price =
-            d['estimatedPrice'] as int;
-          final dateStr = d['dateStr'] as String;
-
-          return GestureDetector(
-            onTap: available
-              ? () {
-                  HapticFeedback.lightImpact();
-                  // Navigate back to seat selection with new date
-                  Navigator.pop(context, {
-                    'changeDate': true,
-                    'newDate': dateStr,
-                  });
-                }
-              : null,
-            child: Container(
-              width: 80,
-              margin: const EdgeInsets.only(
-                right: 8,
-              ),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: available
-                  ? Colors.white
-                  : const Color(0xFFF8FAFC),
-                borderRadius:
-                  BorderRadius.circular(12),
-                border: Border.all(
-                  color: available
-                    ? const Color(0xFF1A56DB)
-                    : const Color(0xFFE2E8F0),
-                  width: available ? 1.5 : 1,
-                ),
-              ),
-              child: Column(
-                mainAxisAlignment:
-                  MainAxisAlignment.center,
-                children: [
-                  Text(
-                    dateStr,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: available
-                        ? const Color(0xFF1E293B)
-                        : const Color(0xFF94A3B8),
-                      fontFamily:
-                        GoogleFonts.poppins()
-                        .fontFamily,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 4),
-                  if (available) ...[
-                    Text(
-                      '₹$price',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(
-                          0xFF1A56DB,
-                        ),
-                        fontFamily:
-                          GoogleFonts.poppins()
-                          .fontFamily,
-                      ),
-                    ),
-                    Text(
-                      '$busCount buses',
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: const Color(
-                          0xFF16A34A,
-                        ),
-                        fontFamily:
-                          GoogleFonts.poppins()
-                          .fontFamily,
-                      ),
-                    ),
-                  ] else
-                    Text(
-                      'No match',
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: const Color(
-                          0xFF94A3B8,
-                        ),
-                        fontFamily:
-                          GoogleFonts.poppins()
-                          .fontFamily,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
     );
   }
 
