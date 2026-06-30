@@ -1,9 +1,7 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/bus_model.dart';
-import '../data/mock_data.dart';
 import 'seat_selection_screen.dart';
 import 'platform_screen.dart';
 
@@ -51,6 +49,9 @@ class _SmartSuggestionScreenState
   List<Map<String, dynamic>> dateOptions = [];
 
   bool isLoading = true;
+
+  // Sort state
+  String sortBy = 'Best Match';
 
   // Split option checkbox states
   final Map<int, bool> _splitCardSelected = {};
@@ -185,7 +186,7 @@ class _SmartSuggestionScreenState
   List<Map<String, dynamic>> _buildZoneMatches() {
     if (exactMatches.isNotEmpty) return [];
 
-    String _getZone(String seatId) {
+    String getZone(String seatId) {
       final digits = seatId.replaceAll(
         RegExp(r'[^0-9]'), '',
       );
@@ -197,7 +198,7 @@ class _SmartSuggestionScreenState
 
     // Get zones of selected seats
     final selectedZones = widget.selectedSeats
-      .map(_getZone)
+      .map(getZone)
       .toSet();
 
     final results = <Map<String, dynamic>>[];
@@ -208,7 +209,7 @@ class _SmartSuggestionScreenState
       final matchedSeats = <String>[];
 
       for (final seat in bus.availableSeats) {
-        final zone = _getZone(seat);
+        final zone = getZone(seat);
         if (selectedZones.contains(zone)) {
           zoneMatched++;
           matchedSeats.add(seat);
@@ -380,9 +381,15 @@ class _SmartSuggestionScreenState
       backgroundColor:
         const Color(0xFFF0F4F8),
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildAppBar(),
           _buildSelectedSeatsBar(),
+          if (!isLoading &&
+              (exactMatches.isNotEmpty ||
+               nearbyMatches.isNotEmpty ||
+               zoneMatches.isNotEmpty))
+            _buildSortBar(),
           Expanded(
             child: isLoading
               ? _buildLoading()
@@ -406,35 +413,19 @@ class _SmartSuggestionScreenState
         ),
       ),
       padding: EdgeInsets.fromLTRB(
-        16,
+        8,
         MediaQuery.of(context).padding.top + 12,
         16,
         16,
       ),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(
-                color: Colors.white
-                  .withOpacity(0.2),
-                borderRadius:
-                  BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.arrow_back,
-                color: Colors.white,
-                size: 18,
-              ),
-            ),
+          IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
           ),
-          const SizedBox(width: 12),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                CrossAxisAlignment.start,
               children: [
                 Text(
                   '${widget.from} → ${widget.to}',
@@ -446,15 +437,44 @@ class _SmartSuggestionScreenState
                       GoogleFonts.poppins()
                       .fontFamily,
                   ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(height: 2),
                 Text(
-                  'Smart seat matching results',
+                  '${widget.date} · ${widget.timeSlot}',
                   style: TextStyle(
                     color: const Color(0xFFBFDBFE),
                     fontSize: 11,
                     fontFamily:
                       GoogleFonts.poppins()
                       .fontFamily,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.directions_bus, color: Colors.white, size: 14),
+                const SizedBox(width: 4),
+                Text(
+                  '${widget.selectedSeats.length}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
@@ -467,9 +487,13 @@ class _SmartSuggestionScreenState
 
   Widget _buildSelectedSeatsBar() {
     return Container(
+      width: double.infinity,
       color: Colors.white,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(
+        16, 12, 16, 12,
+      ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment:
           CrossAxisAlignment.start,
         children: [
@@ -482,10 +506,11 @@ class _SmartSuggestionScreenState
                 .fontFamily,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Wrap(
             spacing: 6,
-            runSpacing: 4,
+            runSpacing: 6,
+            alignment: WrapAlignment.start,
             children: [
               ...widget.seaterSeats.map((s) =>
                 _seatChip(s,
@@ -548,6 +573,143 @@ class _SmartSuggestionScreenState
     );
   }
 
+  Widget _buildSortBar() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(
+        16, 0, 16, 12,
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _sortChip('Best Match'),
+            const SizedBox(width: 8),
+            _sortChip('Price ↑'),
+            const SizedBox(width: 8),
+            _sortChip('Price ↓'),
+            const SizedBox(width: 8),
+            _sortChip('Rating'),
+            const SizedBox(width: 8),
+            _sortChip('Departure'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sortChip(String label) {
+    final isActive = sortBy == label;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        setState(() {
+          sortBy = label;
+          _applySorting();
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 14, vertical: 7,
+        ),
+        decoration: BoxDecoration(
+          color: isActive
+            ? const Color(0xFF1A56DB)
+            : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isActive
+              ? const Color(0xFF1A56DB)
+              : const Color(0xFFE2E8F0),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isActive
+              ? Colors.white
+              : const Color(0xFF64748B),
+            fontFamily: GoogleFonts.poppins()
+              .fontFamily,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _applySorting() {
+    int compareBus(BusModel a, BusModel b) {
+      switch (sortBy) {
+        case 'Price ↑':
+          return a.platforms.values
+            .reduce((x, y) => x < y ? x : y)
+            .compareTo(b.platforms.values
+              .reduce((x, y) => x < y ? x : y));
+        case 'Price ↓':
+          return b.platforms.values
+            .reduce((x, y) => x < y ? x : y)
+            .compareTo(a.platforms.values
+              .reduce((x, y) => x < y ? x : y));
+        case 'Rating':
+          return b.rating.compareTo(a.rating);
+        case 'Departure':
+          return _parseTime(a.departure)
+            .compareTo(_parseTime(b.departure));
+        default:
+          return 0;
+      }
+    }
+
+    setState(() {
+      exactMatches.sort(compareBus);
+      nearbyMatches.sort((a, b) {
+        final busesA = a['buses'] as List<BusModel>;
+        final busesB = b['buses'] as List<BusModel>;
+        if (busesA.isEmpty || busesB.isEmpty) return 0;
+        return compareBus(busesA.first, busesB.first);
+      });
+      zoneMatches.sort((a, b) {
+        final busA = a['bus'] as BusModel;
+        final busB = b['bus'] as BusModel;
+        return compareBus(busA, busB);
+      });
+    });
+  }
+
+  Widget _amenityIcon(String amenity) {
+    IconData icon;
+    switch (amenity.toLowerCase()) {
+      case 'ac': icon = Icons.ac_unit; break;
+      case 'wifi': icon = Icons.wifi; break;
+      case 'charging': icon = Icons.bolt; break;
+      case 'water': icon = Icons.water_drop; break;
+      case 'blanket': icon = Icons.bed; break;
+      case 'pillow': icon = Icons.airline_seat_legroom_extra;
+        break;
+      case 'snacks': icon = Icons.fastfood; break;
+      default: icon = Icons.check_circle_outline;
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13,
+          color: const Color(0xFF1A56DB)),
+        const SizedBox(width: 3),
+        Text(
+          amenity,
+          style: TextStyle(
+            fontSize: 10,
+            color: const Color(0xFF64748B),
+            fontFamily: GoogleFonts.poppins()
+              .fontFamily,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildLoading() {
     return Center(
       child: Column(
@@ -573,16 +735,31 @@ class _SmartSuggestionScreenState
   }
 
   Widget _buildResults() {
+    final totalFound = exactMatches.length +
+      nearbyMatches.length + zoneMatches.length;
+
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
-        16, 16, 16,
-        MediaQuery.of(context).padding.bottom
-        + 16,
+        16, 12, 16,
+        MediaQuery.of(context).padding.bottom + 16,
       ),
       child: Column(
         crossAxisAlignment:
           CrossAxisAlignment.start,
         children: [
+
+          // Results count - first item
+          Text(
+            '$totalFound option(s) found',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF1E293B),
+              fontFamily: GoogleFonts.poppins()
+                .fontFamily,
+            ),
+          ),
+          const SizedBox(height: 12),
 
           // ── LAYER 1: EXACT MATCHES ─────────────
           if (exactMatches.isNotEmpty) ...[
@@ -601,7 +778,7 @@ class _SmartSuggestionScreenState
           // ── LAYER 2: NEARBY SUGGESTIONS ────────
           if (nearbyMatches.isNotEmpty) ...[
             _sectionHeader(
-              '🔄 Nearby Seat Suggestions',
+              'Nearby Seat Suggestions',
               'Change 1 seat to get more options',
               const Color(0xFF1A56DB),
             ),
@@ -616,8 +793,8 @@ class _SmartSuggestionScreenState
               exactMatches.isEmpty &&
               nearbyMatches.isEmpty) ...[
             _sectionHeader(
-              '📍 Same Area Matches',
-              'Similar seat positions available based on your seat selection',
+              'Same Area Matches',
+              'Nearer seat positions available based on your seat selection',
               const Color(0xFFF59E0B),
             ),
             ...zoneMatches.map((m) =>
@@ -642,7 +819,7 @@ class _SmartSuggestionScreenState
           // ── LAYER 5: DATE OPTIONS ──────────────
           if (exactMatches.isEmpty && zoneMatches.isEmpty) ...[
             _sectionHeader(
-              '📅 Try Different Date',
+              'Try Different Date',
               'Prices and availability by day',
               const Color(0xFF0891B2),
             ),
@@ -671,45 +848,29 @@ class _SmartSuggestionScreenState
       padding: const EdgeInsets.only(
         bottom: 10,
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment:
+          CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 4,
-            height: 36,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius:
-                BorderRadius.circular(2),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF1E293B),
+              fontFamily:
+                GoogleFonts.poppins()
+                .fontFamily,
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment:
-                CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF1E293B),
-                    fontFamily:
-                      GoogleFonts.poppins()
-                      .fontFamily,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: const Color(0xFF64748B),
-                    fontFamily:
-                      GoogleFonts.poppins()
-                      .fontFamily,
-                  ),
-                ),
-              ],
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: 11,
+              color: const Color(0xFF64748B),
+              fontFamily:
+                GoogleFonts.poppins()
+                .fontFamily,
             ),
           ),
         ],
@@ -729,61 +890,23 @@ class _SmartSuggestionScreenState
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: const Color(0xFF16A34A),
-          width: 1.5,
+          color: const Color(0xFFE2E8F0),
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF16A34A)
-              .withOpacity(0.1),
-            blurRadius: 8,
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 6,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Row 1: operator + bus type + rating + layout
           Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 3,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF0FDF4),
-                  borderRadius:
-                    BorderRadius.circular(20),
-                  border: Border.all(
-                    color: const Color(0xFF16A34A),
-                  ),
-                ),
-                child: Text(
-                  '✅ All seats available',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF16A34A),
-                    fontFamily:
-                      GoogleFonts.poppins()
-                      .fontFamily,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                bus.layout,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: const Color(0xFF64748B),
-                  fontFamily:
-                    GoogleFonts.poppins()
-                    .fontFamily,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
+            crossAxisAlignment:
+              CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Column(
@@ -795,21 +918,18 @@ class _SmartSuggestionScreenState
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color:
-                          const Color(0xFF1E293B),
+                        color: const Color(0xFF1E293B),
                         fontFamily:
                           GoogleFonts.poppins()
                           .fontFamily,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
-                      '${bus.departure} → '
-                      '${bus.arrival}  '
-                      '· ${bus.duration}',
+                      bus.busType,
                       style: TextStyle(
                         fontSize: 11,
-                        color:
-                          const Color(0xFF64748B),
+                        color: const Color(0xFF64748B),
                         fontFamily:
                           GoogleFonts.poppins()
                           .fontFamily,
@@ -818,28 +938,201 @@ class _SmartSuggestionScreenState
                   ],
                 ),
               ),
+              Row(
+                children: [
+                  Container(
+                    padding:
+                      const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 3,
+                      ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFBEB),
+                      borderRadius:
+                        BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.star,
+                          size: 11,
+                          color: Color(0xFFF59E0B),
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          bus.rating.toString(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(
+                              0xFF92400E,
+                            ),
+                            fontFamily:
+                              GoogleFonts.poppins()
+                              .fontFamily,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding:
+                      const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 3,
+                      ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius:
+                        BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      bus.layout,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFFB91C1C),
+                        fontFamily:
+                          GoogleFonts.poppins()
+                          .fontFamily,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // Match type badge
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8, vertical: 3,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: const Color(0xFF16A34A),
+              ),
+            ),
+            child: Text(
+              '✅ Perfect Match',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF16A34A),
+                fontFamily: GoogleFonts.poppins()
+                  .fontFamily,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          // Row: departure → duration → arrival
+          Row(
+            children: [
+              Text(
+                bus.departure,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1E293B),
+                  fontFamily: GoogleFonts.poppins()
+                    .fontFamily,
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Text(
+                      bus.duration,
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: const Color(0xFF94A3B8),
+                        fontFamily:
+                          GoogleFonts.poppins()
+                          .fontFamily,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 1,
+                            color: const Color(
+                              0xFFE2E8F0,
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.directions_bus,
+                          size: 12,
+                          color: Color(0xFF94A3B8),
+                        ),
+                        Expanded(
+                          child: Container(
+                            height: 1,
+                            color: const Color(
+                              0xFFE2E8F0,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                bus.arrival,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1E293B),
+                  fontFamily: GoogleFonts.poppins()
+                    .fontFamily,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // Amenity icons row
+          if (bus.amenities.isNotEmpty)
+            Wrap(
+              spacing: 10,
+              children: bus.amenities
+                .map((a) => _amenityIcon(a))
+                .toList(),
+            ),
+
+          const SizedBox(height: 10),
+
+          // Row: price + seats left + View Platforms
+          Row(
+            children: [
               Column(
                 crossAxisAlignment:
-                  CrossAxisAlignment.end,
+                  CrossAxisAlignment.start,
                 children: [
                   Text(
                     '₹$cheapPrice',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
-                      color:
-                        const Color(0xFF1A56DB),
+                      color: const Color(0xFF1A56DB),
                       fontFamily:
                         GoogleFonts.poppins()
                         .fontFamily,
                     ),
                   ),
                   Text(
-                    'per person',
+                    'onwards',
                     style: TextStyle(
                       fontSize: 9,
-                      color:
-                        const Color(0xFF94A3B8),
+                      color: const Color(0xFF94A3B8),
                       fontFamily:
                         GoogleFonts.poppins()
                         .fontFamily,
@@ -847,54 +1140,77 @@ class _SmartSuggestionScreenState
                   ),
                 ],
               ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            height: 40,
-            child: ElevatedButton(
-              onPressed: () {
-                HapticFeedback.mediumImpact();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                      PlatformScreen(
-                        bus: bus,
-                        from: widget.from,
-                        to: widget.to,
-                        date: widget.date,
-                        mode: 'Position',
-                        selectedSeats:
-                          widget.selectedSeats,
-                        seatCount:
-                          widget.selectedSeats.length,
-                      ),
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor:
-                  const Color(0xFF1A56DB),
-                shape: RoundedRectangleBorder(
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
                   borderRadius:
-                    BorderRadius.circular(10),
+                    BorderRadius.circular(20),
                 ),
-                elevation: 0,
-              ),
-              child: Text(
-                'Book This Bus →',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  fontFamily:
-                    GoogleFonts.poppins()
-                    .fontFamily,
+                child: Text(
+                  '${bus.availableSeats.length} '
+                  'seats left',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF16A34A),
+                    fontFamily:
+                      GoogleFonts.poppins()
+                      .fontFamily,
+                  ),
                 ),
               ),
-            ),
+              const Spacer(),
+              ElevatedButton(
+                onPressed: () {
+                  HapticFeedback.mediumImpact();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                        PlatformScreen(
+                          bus: bus,
+                          from: widget.from,
+                          to: widget.to,
+                          date: widget.date,
+                          mode: 'Position',
+                          selectedSeats:
+                            widget.selectedSeats,
+                          seatCount: widget.selectedSeats.length,
+                        ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                    const Color(0xFFEFF6FF),
+                  foregroundColor:
+                    const Color(0xFF1A56DB),
+                  elevation: 0,
+                  padding:
+                    const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10,
+                    ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius:
+                      BorderRadius.circular(10),
+                  ),
+                ),
+                child: Text(
+                  'View Platforms',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    fontFamily:
+                      GoogleFonts.poppins()
+                      .fontFamily,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -909,6 +1225,8 @@ class _SmartSuggestionScreenState
     final original = match['original'] as String;
     final suggested = match['suggested'] as String;
     final busCount = match['busCount'] as int;
+    final newSeats = match['newSeats'] as List<String>;
+    final firstBus = buses.isNotEmpty ? buses.first : null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -924,6 +1242,7 @@ class _SmartSuggestionScreenState
         crossAxisAlignment:
           CrossAxisAlignment.start,
         children: [
+          // Suggestion text
           Row(
             children: [
               Container(
@@ -984,39 +1303,247 @@ class _SmartSuggestionScreenState
             ),
           ),
           const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            height: 38,
-            child: OutlinedButton(
-              onPressed: () {
-                HapticFeedback.lightImpact();
-                // Go back to seat selection with seat replacement data
-                Navigator.pop(context, {
-                  'replaceSeat': original,
-                  'withSeat': suggested,
-                });
-              },
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(
-                  color: Color(0xFF1A56DB),
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius:
-                    BorderRadius.circular(10),
-                ),
-              ),
-              child: Text(
-                'Use $suggested instead →',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1A56DB),
-                  fontFamily:
-                    GoogleFonts.poppins()
-                    .fontFamily,
-                ),
+          
+          // Show full bus card if buses available
+          if (firstBus != null)
+            _nearbyBusCard(firstBus, newSeats),
+          
+          const SizedBox(height: 8),
+          
+          // Use this seat combination link
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              Navigator.pop(context, {
+                'replaceSeat': original,
+                'withSeat': suggested,
+              });
+            },
+            child: Text(
+              'Use this seat combination →',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF1A56DB),
+                fontFamily: GoogleFonts.poppins()
+                  .fontFamily,
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _nearbyBusCard(BusModel bus, List<String> newSeats) {
+    final cheapPrice = bus.platforms.values
+      .reduce((a, b) => a < b ? a : b);
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Match badge
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 6, vertical: 2,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '🔄 Nearby Seat Match',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF1A56DB),
+                fontFamily: GoogleFonts.poppins()
+                  .fontFamily,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          
+          // Row 1: operator + rating + layout
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  bus.operator,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF1E293B),
+                    fontFamily: GoogleFonts.poppins()
+                      .fontFamily,
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5, vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFBEB),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.star, size: 9, color: Color(0xFFF59E0B)),
+                        const SizedBox(width: 2),
+                        Text(
+                          bus.rating.toString(),
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF92400E),
+                            fontFamily: GoogleFonts.poppins().fontFamily,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5, vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      bus.layout,
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFFB91C1C),
+                        fontFamily: GoogleFonts.poppins().fontFamily,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 6),
+          
+          // Departure → duration → arrival
+          Row(
+            children: [
+              Text(
+                bus.departure,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1E293B),
+                  fontFamily: GoogleFonts.poppins().fontFamily,
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Text(
+                      bus.duration,
+                      style: TextStyle(
+                        fontSize: 8,
+                        color: const Color(0xFF94A3B8),
+                        fontFamily: GoogleFonts.poppins().fontFamily,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                bus.arrival,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1E293B),
+                  fontFamily: GoogleFonts.poppins().fontFamily,
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 6),
+          
+          // Amenity icons (compact)
+          if (bus.amenities.isNotEmpty)
+            Wrap(
+              spacing: 8,
+              children: bus.amenities.take(3)
+                .map((a) => _amenityIcon(a))
+                .toList(),
+            ),
+          
+          const SizedBox(height: 8),
+          
+          // Row: price + View Platforms
+          Row(
+            children: [
+              Text(
+                '₹$cheapPrice',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF1A56DB),
+                  fontFamily: GoogleFonts.poppins().fontFamily,
+                ),
+              ),
+              const Spacer(),
+              ElevatedButton(
+                onPressed: () {
+                  HapticFeedback.mediumImpact();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PlatformScreen(
+                        bus: bus,
+                        from: widget.from,
+                        to: widget.to,
+                        date: widget.date,
+                        mode: 'Position',
+                        selectedSeats: newSeats,
+                        seatCount: newSeats.length,
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEFF6FF),
+                  foregroundColor: const Color(0xFF1A56DB),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Text(
+                  'View Platforms',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: GoogleFonts.poppins().fontFamily,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1040,14 +1567,23 @@ class _SmartSuggestionScreenState
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: const Color(0xFFFDE68A),
+          color: const Color(0xFFE2E8F0),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
-        crossAxisAlignment:
-          CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Row 1: operator + bus type + rating + layout
           Row(
+            crossAxisAlignment:
+              CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Column(
@@ -1057,7 +1593,7 @@ class _SmartSuggestionScreenState
                     Text(
                       bus.operator,
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: const Color(0xFF1E293B),
                         fontFamily:
@@ -1065,9 +1601,9 @@ class _SmartSuggestionScreenState
                           .fontFamily,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
-                      '${zones.join(' & ')} area '
-                      'seats available',
+                      bus.busType,
                       style: TextStyle(
                         fontSize: 11,
                         color: const Color(0xFF64748B),
@@ -1076,54 +1612,62 @@ class _SmartSuggestionScreenState
                           .fontFamily,
                       ),
                     ),
-                    Text(
-                      bus.departure,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: const Color(0xFF94A3B8),
-                        fontFamily:
-                          GoogleFonts.poppins()
-                          .fontFamily,
-                      ),
-                    ),
                   ],
                 ),
               ),
-              Column(
-                crossAxisAlignment:
-                  CrossAxisAlignment.end,
+              Row(
                 children: [
-                  Text(
-                    '₹$cheapPrice',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF1A56DB),
-                      fontFamily:
-                        GoogleFonts.poppins()
-                        .fontFamily,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
                   Container(
                     padding:
                       const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3,
+                        horizontal: 6, vertical: 3,
                       ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFFFBEB),
                       borderRadius:
-                        BorderRadius.circular(20),
-                      border: Border.all(
-                        color: const Color(0xFFF59E0B),
+                        BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.star,
+                          size: 11,
+                          color: Color(0xFFF59E0B),
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          bus.rating.toString(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(
+                              0xFF92400E,
+                            ),
+                            fontFamily:
+                              GoogleFonts.poppins()
+                              .fontFamily,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding:
+                      const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 3,
                       ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius:
+                        BorderRadius.circular(6),
                     ),
                     child: Text(
-                      'Area match',
+                      bus.layout,
                       style: TextStyle(
-                        fontSize: 9,
+                        fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: const Color(0xFFF59E0B),
+                        color: const Color(0xFFB91C1C),
                         fontFamily:
                           GoogleFonts.poppins()
                           .fontFamily,
@@ -1134,50 +1678,227 @@ class _SmartSuggestionScreenState
               ),
             ],
           ),
+
           const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            height: 38,
-            child: ElevatedButton(
-              onPressed: () {
-                HapticFeedback.mediumImpact();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                      PlatformScreen(
-                        bus: bus,
-                        from: widget.from,
-                        to: widget.to,
-                        date: widget.date,
-                        mode: 'Position',
-                        selectedSeats: matchedSeats,
-                        seatCount: matchedSeats.length,
-                      ),
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor:
-                  const Color(0xFFF59E0B),
-                shape: RoundedRectangleBorder(
-                  borderRadius:
-                    BorderRadius.circular(10),
-                ),
-                elevation: 0,
+
+          // Match type badge
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8, vertical: 3,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFBEB),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: const Color(0xFFF59E0B),
               ),
-              child: Text(
-                'Book This Bus →',
+            ),
+            child: Text(
+              '📍 Area Match',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFFF59E0B),
+                fontFamily: GoogleFonts.poppins()
+                  .fontFamily,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 4),
+
+          Text(
+            '${zones.join(', ')} area seats available',
+            style: TextStyle(
+              fontSize: 10,
+              color: const Color(0xFF64748B),
+              fontFamily: GoogleFonts.poppins()
+                .fontFamily,
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          // Row: departure → duration → arrival
+          Row(
+            children: [
+              Text(
+                bus.departure,
                 style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
+                  fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  fontFamily:
-                    GoogleFonts.poppins()
+                  color: const Color(0xFF1E293B),
+                  fontFamily: GoogleFonts.poppins()
                     .fontFamily,
                 ),
               ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Text(
+                      bus.duration,
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: const Color(0xFF94A3B8),
+                        fontFamily:
+                          GoogleFonts.poppins()
+                          .fontFamily,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 1,
+                            color: const Color(
+                              0xFFE2E8F0,
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.directions_bus,
+                          size: 12,
+                          color: Color(0xFF94A3B8),
+                        ),
+                        Expanded(
+                          child: Container(
+                            height: 1,
+                            color: const Color(
+                              0xFFE2E8F0,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                bus.arrival,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1E293B),
+                  fontFamily: GoogleFonts.poppins()
+                    .fontFamily,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // Amenity icons row
+          if (bus.amenities.isNotEmpty)
+            Wrap(
+              spacing: 10,
+              children: bus.amenities
+                .map((a) => _amenityIcon(a))
+                .toList(),
             ),
+
+          const SizedBox(height: 10),
+
+          // Row: price + seats left + View Platforms
+          Row(
+            children: [
+              Column(
+                crossAxisAlignment:
+                  CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '₹$cheapPrice',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF1A56DB),
+                      fontFamily:
+                        GoogleFonts.poppins()
+                        .fontFamily,
+                    ),
+                  ),
+                  Text(
+                    'onwards',
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: const Color(0xFF94A3B8),
+                      fontFamily:
+                        GoogleFonts.poppins()
+                        .fontFamily,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius:
+                    BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${matchedSeats.length} '
+                  'seats left',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF16A34A),
+                    fontFamily:
+                      GoogleFonts.poppins()
+                      .fontFamily,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              ElevatedButton(
+                onPressed: () {
+                  HapticFeedback.mediumImpact();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                        PlatformScreen(
+                          bus: bus,
+                          from: widget.from,
+                          to: widget.to,
+                          date: widget.date,
+                          mode: 'Position',
+                          selectedSeats: matchedSeats,
+                          seatCount: matchedSeats.length,
+                        ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                    const Color(0xFFEFF6FF),
+                  foregroundColor:
+                    const Color(0xFF1A56DB),
+                  elevation: 0,
+                  padding:
+                    const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10,
+                    ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius:
+                      BorderRadius.circular(10),
+                  ),
+                ),
+                child: Text(
+                  'View Platforms',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    fontFamily:
+                      GoogleFonts.poppins()
+                      .fontFamily,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1329,7 +2050,7 @@ class _SmartSuggestionScreenState
                 elevation: 0,
               ),
               child: Text(
-                'Book Both Groups →',
+                'View Platforms →',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 12,
@@ -1354,9 +2075,6 @@ class _SmartSuggestionScreenState
     int cardIndex,
     bool groupSelected,
   ) {
-    final cheapPrice = bus.platforms.values
-      .reduce((a, b) => a < b ? a : b);
-
     return Row(
       children: [
         Checkbox(
@@ -1398,39 +2116,102 @@ class _SmartSuggestionScreenState
             crossAxisAlignment:
               CrossAxisAlignment.start,
             children: [
-              Text(
-                bus.operator,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1E293B),
-                  fontFamily:
-                    GoogleFonts.poppins()
-                    .fontFamily,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      bus.operator,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1E293B),
+                        fontFamily:
+                          GoogleFonts.poppins()
+                          .fontFamily,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 1,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFBEB),
+                      borderRadius:
+                        BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.star, size: 8, color: Color(0xFFF59E0B)),
+                        const SizedBox(width: 1),
+                        Text(
+                          bus.rating.toString(),
+                          style: TextStyle(
+                            fontSize: 8,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF92400E),
+                            fontFamily: GoogleFonts.poppins().fontFamily,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
+              const SizedBox(height: 2),
               Text(
                 '${bus.departure} · '
                 'Seats: ${seats.join(', ')}',
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 9,
                   color: const Color(0xFF64748B),
                   fontFamily:
                     GoogleFonts.poppins()
                     .fontFamily,
                 ),
               ),
+              // Compact amenities row
+              if (bus.amenities.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Wrap(
+                    spacing: 6,
+                    children: bus.amenities.take(3)
+                      .map((a) => _amenityIcon(a))
+                      .toList(),
+                  ),
+                ),
             ],
           ),
         ),
-        Text(
-          '₹$cheapPrice',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: const Color(0xFF1A56DB),
-            fontFamily: GoogleFonts.poppins()
-              .fontFamily,
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: () {
+            HapticFeedback.lightImpact();
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PlatformScreen(
+                  bus: bus,
+                  from: widget.from,
+                  to: widget.to,
+                  date: widget.date,
+                  mode: 'Position',
+                  selectedSeats: seats,
+                  seatCount: seats.length,
+                ),
+              ),
+            );
+          },
+          child: Text(
+            'View',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF1A56DB),
+              fontFamily: GoogleFonts.poppins()
+                .fontFamily,
+            ),
           ),
         ),
       ],
@@ -1457,19 +2238,11 @@ class _SmartSuggestionScreenState
             onTap: available
               ? () {
                   HapticFeedback.lightImpact();
-                  ScaffoldMessenger.of(context)
-                    .showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Switched to $dateStr',
-                      ),
-                      backgroundColor:
-                        const Color(0xFF1A56DB),
-                      duration: const Duration(
-                        seconds: 2,
-                      ),
-                    ),
-                  );
+                  // Navigate back to seat selection with new date
+                  Navigator.pop(context, {
+                    'changeDate': true,
+                    'newDate': dateStr,
+                  });
                 }
               : null,
             child: Container(
