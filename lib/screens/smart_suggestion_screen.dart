@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/bus_model.dart';
 import 'seat_selection_screen.dart';
 import 'platform_screen.dart';
+import 'split_option_screen.dart';
 
 class SmartSuggestionScreen extends StatefulWidget {
   final String from;
@@ -52,10 +53,6 @@ class _SmartSuggestionScreenState
   // Sort state
   String sortBy = 'Best Match';
 
-  // Split option checkbox states
-  final Map<int, bool> _splitCardSelected = {};
-  final Map<int, Map<String, bool>> _splitGroupSelected = {};
-
   @override
   void initState() {
     super.initState();
@@ -88,44 +85,117 @@ class _SmartSuggestionScreenState
   List<Map<String, dynamic>> _buildNearbyMatches() {
     if (exactMatches.isNotEmpty) return [];
 
+    // Try to find a single combo that satisfies
+    // ALL selected seats with minimal changes
+    // Limit to max 2 seat changes at once
+
+    final selectedSeats = widget.selectedSeats;
+    if (selectedSeats.isEmpty) return [];
+
+    // First find which seats have NO exact bus match
+    // across ALL selected seats combined
+    final failingSeats = selectedSeats.where((seat) {
+      return !widget.allRouteBuses.any((bus) =>
+        widget.selectedSeats.every((s) =>
+          bus.availableSeats.contains(s)
+        )
+      );
+    }).toList();
+
+    if (failingSeats.isEmpty) return [];
+
+    // Try replacing each failing seat with nearby
+    // variant and check if FULL combo now works
     final results = <Map<String, dynamic>>[];
+    final seenCombos = <String>{};
 
-    // For each selected seat try ±2 row variants
-    for (final seat in widget.selectedSeats) {
+    // Single seat change attempts
+    for (final seat in failingSeats) {
       final variants = _getNearbySeats(seat);
-
       for (final variant in variants) {
-        // Replace this seat with variant
-        final newSeats = widget.selectedSeats
+        final newSeats = selectedSeats
           .map((s) => s == seat ? variant : s)
           .toList();
-
-        // Find buses with new seat combo
         final matches = widget.allRouteBuses
-          .where((bus) => newSeats.every(
-            (s) => bus.availableSeats.contains(s),
-          ))
+          .where((bus) => newSeats.every((s) =>
+            bus.availableSeats.contains(s)))
           .toList();
-
         if (matches.isNotEmpty) {
+          final comboKey = newSeats.toList()..sort();
+          final key = comboKey.join(',');
+          if (seenCombos.contains(key)) continue;
+          seenCombos.add(key);
           results.add({
-            'original': seat,
-            'suggested': variant,
+            'changes': [
+              {'original': seat, 'suggested': variant}
+            ],
             'newSeats': newSeats,
             'buses': matches,
             'busCount': matches.length,
+            'changeCount': 1,
           });
         }
       }
     }
 
-    // Sort by most buses available
-    results.sort((a, b) =>
-      (b['busCount'] as int)
-      .compareTo(a['busCount'] as int),
-    );
+    // If single change found, return top 1 only
+    if (results.isNotEmpty) {
+      results.sort((a, b) =>
+        (b['busCount'] as int)
+        .compareTo(a['busCount'] as int));
+      return results.take(1).toList();
+    }
 
-    return results.take(3).toList();
+    // No single change worked — try 2-seat changes
+    // Only if failing seats >= 2
+    if (failingSeats.length >= 2) {
+      final twoChangeResults = <Map<String, dynamic>>[];
+      for (int i = 0; i < failingSeats.length; i++) {
+        for (int j = i + 1; j < failingSeats.length; j++) {
+          final seat1 = failingSeats[i];
+          final seat2 = failingSeats[j];
+          final variants1 = _getNearbySeats(seat1);
+          final variants2 = _getNearbySeats(seat2);
+          for (final v1 in variants1) {
+            for (final v2 in variants2) {
+              final newSeats = selectedSeats
+                .map((s) => s == seat1 ? v1 : s == seat2 ? v2 : s)
+                .toList();
+              final matches = widget.allRouteBuses
+                .where((bus) => newSeats.every(
+                  (s) => bus.availableSeats.contains(s)))
+                .toList();
+              if (matches.isNotEmpty) {
+                final comboKey = newSeats.toList()..sort();
+                final key = comboKey.join(',');
+                if (seenCombos.contains(key)) continue;
+                seenCombos.add(key);
+                twoChangeResults.add({
+                  'changes': [
+                    {'original': seat1, 'suggested': v1},
+                    {'original': seat2, 'suggested': v2},
+                  ],
+                  'newSeats': newSeats,
+                  'buses': matches,
+                  'busCount': matches.length,
+                  'changeCount': 2,
+                });
+              }
+            }
+          }
+        }
+      }
+      if (twoChangeResults.isNotEmpty) {
+        twoChangeResults.sort((a, b) =>
+          (b['busCount'] as int)
+          .compareTo(a['busCount'] as int));
+        return twoChangeResults.take(1).toList();
+      }
+    }
+
+    // More than 2 changes needed — return empty
+    // Fallback will go to zone matches instead
+    return [];
   }
 
   List<String> _getNearbySeats(String seatId) {
@@ -722,18 +792,65 @@ class _SmartSuggestionScreenState
             const SizedBox(height: 16),
           ],
 
-          // ── LAYER 4: SPLIT OPTIONS ─────────────
-          if (splitOptions.isNotEmpty) ...[
-            _sectionHeader(
-              '🚌 Split Bus Option',
-              'Travel same time on 2 buses',
-              const Color(0xFF7C3AED),
+          // ── SPLIT OPTION BANNER (when available and other results exist) ──
+          if (splitOptions.isNotEmpty &&
+              (exactMatches.isNotEmpty ||
+               nearbyMatches.isNotEmpty ||
+               zoneMatches.isNotEmpty))
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SplitOptionScreen(
+                        splitOptions: splitOptions,
+                        from: widget.from,
+                        to: widget.to,
+                        date: widget.date,
+                        timeSlot: widget.timeSlot,
+                        selectedSeats: widget.selectedSeats,
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F3FF),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFFE9D5FF),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment:
+                      MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.call_split,
+                        color: Color(0xFF7C3AED),
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Can\'t find what you need? '
+                        'Try Split Bus Option →',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF7C3AED),
+                          fontFamily: GoogleFonts.poppins()
+                            .fontFamily,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
-            ...splitOptions.asMap().entries.map((entry) =>
-              _splitOptionCard(entry.value, entry.key),
-            ),
-            const SizedBox(height: 16),
-          ],
 
           // ── NO RESULTS MESSAGE ─────────────────
           if (exactMatches.isEmpty &&
@@ -784,6 +901,32 @@ class _SmartSuggestionScreenState
         ],
       ),
     );
+  }
+
+  String _womenBadgeLabel(BusModel bus) {
+    final hasWomenSeater = bus.womenOnlySeats
+      .any((s) => widget.seaterSeats.contains(s));
+    final hasWomenLower = bus.womenOnlySeats
+      .any((s) => widget.lowerSeats.contains(s));
+    final hasWomenUpper = bus.womenOnlySeats
+      .any((s) => widget.upperSeats.contains(s));
+
+    if (hasWomenSeater && hasWomenLower) {
+      return '♀ Seat + Berth';
+    }
+    if (hasWomenLower && hasWomenUpper) {
+      return '♀ Lower + Upper';
+    }
+    if (hasWomenSeater) {
+      return '♀ Women Seat';
+    }
+    if (hasWomenLower) {
+      return '♀ Women Lower';
+    }
+    if (hasWomenUpper) {
+      return '♀ Women Upper';
+    }
+    return '♀ Women';
   }
 
   // Exact match bus card
@@ -930,7 +1073,7 @@ class _SmartSuggestionScreenState
                             ),
                             const SizedBox(width: 2),
                             Text(
-                              'Women Seat',
+                              _womenBadgeLabel(bus),
                               style: TextStyle(
                                 fontSize: 9,
                                 fontWeight: FontWeight.w700,
@@ -1122,10 +1265,9 @@ class _SmartSuggestionScreenState
                           from: widget.from,
                           to: widget.to,
                           date: widget.date,
-                          mode: 'Position',
+                          timeSlot: widget.timeSlot,
                           selectedSeats:
                             widget.selectedSeats,
-                          seatCount: widget.selectedSeats.length,
                         ),
                     ),
                   );
@@ -1168,11 +1310,15 @@ class _SmartSuggestionScreenState
     Map<String, dynamic> match,
   ) {
     final buses = match['buses'] as List<BusModel>;
-    final original = match['original'] as String;
-    final suggested = match['suggested'] as String;
-    final busCount = match['busCount'] as int;
+    final changes = match['changes'] as List<Map<String, dynamic>>;
     final newSeats = match['newSeats'] as List<String>;
-    final firstBus = buses.isNotEmpty ? buses.first : null;
+    final busCount = match['busCount'] as int;
+    final changeCount = match['changeCount'] as int;
+
+    // Show only first matching bus card
+    final bus = buses.first;
+    final cheapPrice = bus.platforms.values
+      .reduce((a, b) => a < b ? a : b);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -1181,347 +1327,396 @@ class _SmartSuggestionScreenState
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: const Color(0xFFBFDBFE),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment:
-          CrossAxisAlignment.start,
-        children: [
-          // Suggestion text with button on right
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Left side: bus count badge + seat change
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding:
-                        const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3,
-                        ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEFF6FF),
-                        borderRadius:
-                          BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '$busCount buses available',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF1A56DB),
-                          fontFamily:
-                            GoogleFonts.poppins()
-                              .fontFamily,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Flexible(
-                      child: RichText(
-                        text: TextSpan(
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontFamily: GoogleFonts.poppins()
-                              .fontFamily,
-                            color: const Color(0xFF1E293B),
-                          ),
-                          children: [
-                            const TextSpan(
-                              text: 'Change ',
-                            ),
-                            TextSpan(
-                              text: original,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFFEF4444),
-                                decoration:
-                                  TextDecoration.lineThrough,
-                              ),
-                            ),
-                            const TextSpan(text: ' → '),
-                            TextSpan(
-                              text: suggested,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF16A34A),
-                              ),
-                            ),
-                          ],
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Right side: round blue button
-              GestureDetector(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  Navigator.pop(context, {
-                    'replaceSeat': original,
-                    'withSeat': suggested,
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A56DB),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Use',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          fontFamily: GoogleFonts.poppins()
-                            .fontFamily,
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      const Icon(
-                        Icons.arrow_forward,
-                        size: 12,
-                        color: Colors.white,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          
-          // Show full bus card if buses available
-          if (firstBus != null)
-            _nearbyBusCard(firstBus, newSeats),
-        ],
-      ),
-    );
-  }
-
-  Widget _nearbyBusCard(BusModel bus, List<String> newSeats) {
-    final cheapPrice = bus.platforms.values
-      .reduce((a, b) => a < b ? a : b);
-
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
           color: const Color(0xFFE2E8F0),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Match badge
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 6, vertical: 2,
-            ),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '🔄 Nearby Seat Match',
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF1A56DB),
-                fontFamily: GoogleFonts.poppins()
-                  .fontFamily,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          
-          // Row 1: operator + rating + layout
+
+          // Bus count badge + change count info
           Row(
             children: [
-              Expanded(
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A56DB),
+                  borderRadius: BorderRadius.circular(20),
+                ),
                 child: Text(
-                  bus.operator,
+                  busCount == 1
+                    ? '1 bus available'
+                    : '$busCount buses available',
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF1E293B),
+                    color: Colors.white,
                     fontFamily: GoogleFonts.poppins()
                       .fontFamily,
                   ),
                 ),
               ),
-              Row(
+              const Spacer(),
+              if (changeCount > 1)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: const Color(0xFFF59E0B),
+                    ),
+                  ),
+                  child: Text(
+                    '$changeCount changes',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFFF59E0B),
+                      fontFamily: GoogleFonts.poppins()
+                        .fontFamily,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // ALL seat changes shown together
+          ...changes.map((change) {
+            final original = change['original'] as String;
+            final suggested = change['suggested'] as String;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 5, vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFFBEB),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Row(
+                  const Icon(
+                    Icons.swap_horiz,
+                    size: 14,
+                    color: Color(0xFF94A3B8),
+                  ),
+                  const SizedBox(width: 6),
+                  RichText(
+                    text: TextSpan(
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontFamily: GoogleFonts.poppins()
+                          .fontFamily,
+                      ),
                       children: [
-                        const Icon(Icons.star, size: 9, color: Color(0xFFF59E0B)),
-                        const SizedBox(width: 2),
-                        Text(
-                          bus.rating.toString(),
+                        const TextSpan(
+                          text: 'Change ',
                           style: TextStyle(
-                            fontSize: 9,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                        TextSpan(
+                          text: original,
+                          style: const TextStyle(
+                            color: Color(0xFFEF4444),
                             fontWeight: FontWeight.w700,
-                            color: const Color(0xFF92400E),
-                            fontFamily: GoogleFonts.poppins().fontFamily,
+                            decoration: TextDecoration.lineThrough,
+                          ),
+                        ),
+                        const TextSpan(
+                          text: ' → ',
+                          style: TextStyle(
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                        TextSpan(
+                          text: suggested,
+                          style: const TextStyle(
+                            color: Color(0xFF16A34A),
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 5, vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF2F2),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      bus.layout,
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFFB91C1C),
-                        fontFamily: GoogleFonts.poppins().fontFamily,
-                      ),
-                    ),
-                  ),
                 ],
               ),
-            ],
-          ),
-          
-          const SizedBox(height: 6),
-          
-          // Departure → duration → arrival
-          Row(
-            children: [
-              Text(
-                bus.departure,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1E293B),
-                  fontFamily: GoogleFonts.poppins().fontFamily,
-                ),
+            );
+          }),
+
+          const SizedBox(height: 10),
+
+          // Inner bus card (full card style)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: const Color(0xFFE2E8F0),
               ),
-              Expanded(
-                child: Column(
+            ),
+            child: Column(
+              children: [
+                Row(
                   children: [
-                    Text(
-                      bus.duration,
-                      style: TextStyle(
-                        fontSize: 8,
-                        color: const Color(0xFF94A3B8),
-                        fontFamily: GoogleFonts.poppins().fontFamily,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '🔄 Nearby Seat Match',
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: const Color(0xFF1A56DB),
+                          fontWeight: FontWeight.w600,
+                          fontFamily: GoogleFonts.poppins()
+                            .fontFamily,
+                        ),
                       ),
                     ),
                   ],
                 ),
-              ),
-              Text(
-                bus.arrival,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1E293B),
-                  fontFamily: GoogleFonts.poppins().fontFamily,
-                ),
-              ),
-            ],
-          ),
-          
-          const SizedBox(height: 6),
-          
-          // Amenity icons (compact)
-          if (bus.amenities.isNotEmpty)
-            Wrap(
-              spacing: 8,
-              children: bus.amenities.take(3)
-                .map((a) => _amenityIcon(a))
-                .toList(),
-            ),
-          
-          const SizedBox(height: 8),
-          
-          // Row: price + View Platforms
-          Row(
-            children: [
-              Text(
-                '₹$cheapPrice',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF1A56DB),
-                  fontFamily: GoogleFonts.poppins().fontFamily,
-                ),
-              ),
-              const Spacer(),
-              ElevatedButton(
-                onPressed: () {
-                  HapticFeedback.mediumImpact();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => PlatformScreen(
-                        bus: bus,
-                        from: widget.from,
-                        to: widget.to,
-                        date: widget.date,
-                        mode: 'Position',
-                        selectedSeats: newSeats,
-                        seatCount: newSeats.length,
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            bus.operator,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF1E293B),
+                              fontFamily: GoogleFonts.poppins()
+                                .fontFamily,
+                            ),
+                          ),
+                          Text(
+                            bus.busType,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: const Color(0xFF64748B),
+                              fontFamily: GoogleFonts.poppins()
+                                .fontFamily,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFEFF6FF),
-                  foregroundColor: const Color(0xFF1A56DB),
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 8,
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.star,
+                          size: 11,
+                          color: Color(0xFFF59E0B),
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          bus.rating.toString(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF92400E),
+                            fontFamily: GoogleFonts.poppins()
+                              .fontFamily,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            bus.layout,
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFFB91C1C),
+                              fontFamily: GoogleFonts.poppins()
+                                .fontFamily,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(
+                      bus.departure,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1E293B),
+                        fontFamily: GoogleFonts.poppins()
+                          .fontFamily,
+                      ),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          bus.duration,
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: const Color(0xFF94A3B8),
+                            fontFamily: GoogleFonts.poppins()
+                              .fontFamily,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      bus.arrival,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1E293B),
+                        fontFamily: GoogleFonts.poppins()
+                          .fontFamily,
+                      ),
+                    ),
+                  ],
+                ),
+                if (bus.amenities.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    children: bus.amenities
+                      .take(4)
+                      .map((a) => _amenityIcon(a))
+                      .toList(),
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                ],
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(
+                      '₹$cheapPrice',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF1A56DB),
+                        fontFamily: GoogleFonts.poppins()
+                          .fontFamily,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          // Single USE button applying ALL changes
+          // directly navigates to platform screen
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PlatformScreen(
+                    bus: bus,
+                    from: widget.from,
+                    to: widget.to,
+                    date: widget.date,
+                    timeSlot: widget.timeSlot,
+                    selectedSeats: newSeats,
                   ),
                 ),
-                child: Text(
-                  'View Platforms',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: GoogleFonts.poppins().fontFamily,
-                  ),
-                ),
+              );
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 12,
               ),
-            ],
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A56DB),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Show all changes inline
+                  ...changes.asMap().entries.map((entry) {
+                    final i = entry.key;
+                    final change = entry.value;
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (i > 0)
+                          const Text(
+                            '  +  ',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                            ),
+                          ),
+                        RichText(
+                          text: TextSpan(
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              fontFamily: GoogleFonts.poppins()
+                                .fontFamily,
+                            ),
+                            children: [
+                              TextSpan(
+                                text: change['original'],
+                                style: const TextStyle(
+                                  color: Color(0xFFFFD9D9),
+                                  decoration: TextDecoration.lineThrough,
+                                ),
+                              ),
+                              const TextSpan(
+                                text: '→',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                ),
+                              ),
+                              TextSpan(
+                                text: change['suggested'],
+                                style: const TextStyle(
+                                  color: Color(0xFFBBF7D0),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.arrow_forward,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -1677,7 +1872,7 @@ class _SmartSuggestionScreenState
                             ),
                             const SizedBox(width: 2),
                             Text(
-                              'Women Seat',
+                              _womenBadgeLabel(bus),
                               style: TextStyle(
                                 fontSize: 9,
                                 fontWeight: FontWeight.w700,
@@ -1881,9 +2076,8 @@ class _SmartSuggestionScreenState
                           from: widget.from,
                           to: widget.to,
                           date: widget.date,
-                          mode: 'Position',
+                          timeSlot: widget.timeSlot,
                           selectedSeats: matchedSeats,
-                          seatCount: matchedSeats.length,
                         ),
                     ),
                   );
@@ -1918,319 +2112,6 @@ class _SmartSuggestionScreenState
           ),
         ],
       ),
-    );
-  }
-
-  // Split option card
-  Widget _splitOptionCard(
-    Map<String, dynamic> match,
-    int index,
-  ) {
-    final bus1 = match['bus1'] as BusModel;
-    final bus2 = match['bus2'] as BusModel;
-    final bus1Seats =
-      match['bus1Seats'] as List<String>;
-    final bus2Seats =
-      match['bus2Seats'] as List<String>;
-    final timeDiff = match['timeDiff'] as int;
-
-    // Initialize checkbox states if not present
-    if (!_splitCardSelected.containsKey(index)) {
-      _splitCardSelected[index] = false;
-      _splitGroupSelected[index] = {'Group 1': false, 'Group 2': false};
-    }
-
-    final cardSelected = _splitCardSelected[index] ?? false;
-    final group1Selected = _splitGroupSelected[index]?['Group 1'] ?? false;
-    final group2Selected = _splitGroupSelected[index]?['Group 2'] ?? false;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: cardSelected
-            ? const Color(0xFF7C3AED)
-            : const Color(0xFFE9D5FF),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment:
-          CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Checkbox(
-                value: cardSelected,
-                onChanged: (value) {
-                  setState(() {
-                    _splitCardSelected[index] = value ?? false;
-                    // When card is selected, select all groups
-                    if (value ?? false) {
-                      _splitGroupSelected[index] = {'Group 1': true, 'Group 2': true};
-                    } else {
-                      _splitGroupSelected[index] = {'Group 1': false, 'Group 2': false};
-                    }
-                  });
-                },
-                activeColor: const Color(0xFF7C3AED),
-              ),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF5F3FF),
-                    borderRadius:
-                      BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    timeDiff == 0
-                      ? 'Same departure time'
-                      : '$timeDiff min apart · '
-                        'meet at destination',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF7C3AED),
-                      fontFamily:
-                        GoogleFonts.poppins()
-                        .fontFamily,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          // Bus 1
-          _splitBusRow(
-            bus1,
-            bus1Seats,
-            'Group 1',
-            const Color(0xFF1A56DB),
-            index,
-            group1Selected,
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(
-              vertical: 6,
-            ),
-            child: Divider(height: 1),
-          ),
-          // Bus 2
-          _splitBusRow(
-            bus2,
-            bus2Seats,
-            'Group 2',
-            const Color(0xFF7C3AED),
-            index,
-            group2Selected,
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            height: 38,
-            child: ElevatedButton(
-              onPressed: (group1Selected && group2Selected)
-                ? () {
-                    HapticFeedback.mediumImpact();
-                    // Navigate to platform screen for first bus
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                          PlatformScreen(
-                            bus: bus1,
-                            from: widget.from,
-                            to: widget.to,
-                            date: widget.date,
-                            mode: 'Position',
-                            selectedSeats: bus1Seats,
-                            seatCount: bus1Seats.length,
-                          ),
-                      ),
-                    );
-                  }
-                : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor:
-                  const Color(0xFF7C3AED),
-                shape: RoundedRectangleBorder(
-                  borderRadius:
-                    BorderRadius.circular(10),
-                ),
-                elevation: 0,
-              ),
-              child: Text(
-                'View Platforms →',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  fontFamily:
-                    GoogleFonts.poppins()
-                    .fontFamily,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _splitBusRow(
-    BusModel bus,
-    List<String> seats,
-    String groupLabel,
-    Color color,
-    int cardIndex,
-    bool groupSelected,
-  ) {
-    return Row(
-      children: [
-        Checkbox(
-          value: groupSelected,
-          onChanged: (value) {
-            setState(() {
-              _splitGroupSelected[cardIndex]![groupLabel] = value ?? false;
-              // Update card selection based on group selections
-              final g1 = _splitGroupSelected[cardIndex]?['Group 1'] ?? false;
-              final g2 = _splitGroupSelected[cardIndex]?['Group 2'] ?? false;
-              _splitCardSelected[cardIndex] = g1 && g2;
-            });
-          },
-          activeColor: color,
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 6, vertical: 2,
-          ),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius:
-              BorderRadius.circular(6),
-          ),
-          child: Text(
-            groupLabel,
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              color: color,
-              fontFamily: GoogleFonts.poppins()
-                .fontFamily,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment:
-              CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      bus.operator,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF1E293B),
-                        fontFamily:
-                          GoogleFonts.poppins()
-                          .fontFamily,
-                      ),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4, vertical: 1,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFFBEB),
-                      borderRadius:
-                        BorderRadius.circular(4),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.star, size: 8, color: Color(0xFFF59E0B)),
-                        const SizedBox(width: 1),
-                        Text(
-                          bus.rating.toString(),
-                          style: TextStyle(
-                            fontSize: 8,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF92400E),
-                            fontFamily: GoogleFonts.poppins().fontFamily,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '${bus.departure} · '
-                'Seats: ${seats.join(', ')}',
-                style: TextStyle(
-                  fontSize: 9,
-                  color: const Color(0xFF64748B),
-                  fontFamily:
-                    GoogleFonts.poppins()
-                    .fontFamily,
-                ),
-              ),
-              // Compact amenities row
-              if (bus.amenities.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Wrap(
-                    spacing: 6,
-                    children: bus.amenities.take(3)
-                      .map((a) => _amenityIcon(a))
-                      .toList(),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        GestureDetector(
-          onTap: () {
-            HapticFeedback.lightImpact();
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => PlatformScreen(
-                  bus: bus,
-                  from: widget.from,
-                  to: widget.to,
-                  date: widget.date,
-                  mode: 'Position',
-                  selectedSeats: seats,
-                  seatCount: seats.length,
-                ),
-              ),
-            );
-          },
-          child: Text(
-            'View',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF1A56DB),
-              fontFamily: GoogleFonts.poppins()
-                .fontFamily,
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -2276,34 +2157,74 @@ class _SmartSuggestionScreenState
             ),
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: OutlinedButton(
-              onPressed: () =>
-                Navigator.pop(context),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(
-                  color: Color(0xFF1A56DB),
+          if (splitOptions.isNotEmpty)
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SplitOptionScreen(
+                        splitOptions: splitOptions,
+                        from: widget.from,
+                        to: widget.to,
+                        date: widget.date,
+                        timeSlot: widget.timeSlot,
+                        selectedSeats: widget.selectedSeats,
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF7C3AED),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 0,
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius:
-                    BorderRadius.circular(10),
+                child: Text(
+                  '🚌 Try Split Bus Option →',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    fontFamily: GoogleFonts.poppins()
+                      .fontFamily,
+                  ),
                 ),
               ),
-              child: Text(
-                'Modify Seat Selection',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1A56DB),
-                  fontFamily:
-                    GoogleFonts.poppins()
-                    .fontFamily,
+            )
+          else
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: OutlinedButton(
+                onPressed: () =>
+                  Navigator.pop(context),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(
+                    color: Color(0xFF1A56DB),
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius:
+                      BorderRadius.circular(10),
+                  ),
+                ),
+                child: Text(
+                  'Modify Seat Selection',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF1A56DB),
+                    fontFamily:
+                      GoogleFonts.poppins()
+                      .fontFamily,
+                  ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );

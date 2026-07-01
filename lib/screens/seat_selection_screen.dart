@@ -179,19 +179,19 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
       setState(() {
         allSelectedSeats[activeTemplate]!
           .remove(seatId);
+        seatTypePreference.remove(seatId);
       });
       return;
     }
 
-    // Only check women-only split for Seater
-    if (activeTemplate == 'Seater') {
-      final hasMixed = UniversalTemplateLogic
-        .hasMixedAvailability(seatId, routeBuses);
+    // Check mixed availability for ALL templates
+    // (Seater, Lower, Upper)
+    final hasMixed = UniversalTemplateLogic
+      .hasMixedAvailability(seatId, routeBuses);
 
-      if (hasMixed) {
-        _showSeatTypeChooser(seatId);
-        return;
-      }
+    if (hasMixed) {
+      _showSeatTypeChooser(seatId);
+      return;
     }
 
     // No mixed availability — select normally
@@ -212,6 +212,22 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
         list.add(seatId);
       }
     });
+  }
+
+  String get _seatTypeName {
+    switch (activeTemplate) {
+      case 'Lower': return 'Lower Berth';
+      case 'Upper': return 'Upper Berth';
+      default: return 'Seat';
+    }
+  }
+
+  IconData get _generalIcon {
+    switch (activeTemplate) {
+      case 'Lower': return Icons.bed_outlined;
+      case 'Upper': return Icons.airline_seat_flat;
+      default: return Icons.person;
+    }
   }
 
   void _showSeatTypeChooser(String seatId) {
@@ -254,7 +270,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
               ),
             ),
             Text(
-              'Seat $seatId — Choose type',
+              '${_seatTypeName} $seatId — Choose type',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
@@ -265,8 +281,11 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              'This seat position has both '
-              'women-only and general options',
+              activeTemplate == 'Seater'
+                ? 'This seat has both women-only '
+                  'and general options'
+                : 'This berth has both women-only '
+                  'and general berth options',
               style: TextStyle(
                 fontSize: 12,
                 color: const Color(0xFF64748B),
@@ -282,7 +301,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                 HapticFeedback.mediumImpact();
                 Navigator.pop(ctx);
                 setState(() {
-                  allSelectedSeats['Seater']!
+                  allSelectedSeats[activeTemplate]!
                     .add(seatId);
                   seatTypePreference[seatId] =
                     'women';
@@ -368,7 +387,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                 HapticFeedback.mediumImpact();
                 Navigator.pop(ctx);
                 setState(() {
-                  allSelectedSeats['Seater']!
+                  allSelectedSeats[activeTemplate]!
                     .add(seatId);
                   seatTypePreference[seatId] =
                     'general';
@@ -394,8 +413,8 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                         ),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
-                        Icons.person,
+                      child: Icon(
+                        _generalIcon,
                         color: Colors.white,
                         size: 20,
                       ),
@@ -597,15 +616,14 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => BusListScreen(
+          filteredBuses: matchingBuses,
           from: widget.from,
           to: widget.to,
           date: _currentDate,
           timeSlot: widget.timeSlot,
-          layout: 'Mixed',
-          mode: 'Count',
-          selectedSeats: [],
+          isPositionMode: false,
           seatCount: totalCountModeSeats,
-          buses: matchingBuses,
+          selectedSeats: [],
         ),
       ),
     );
@@ -1831,6 +1849,12 @@ Widget _buildTopViewBerth(
     activeTemplate]!.contains(seatId);
   final isAvailable = count > 0;
 
+  final hasWomenOnly = UniversalTemplateLogic
+    .getWomenOnlyBuses(seatId, routeBuses)
+    .where((bus) =>
+      bus.availableSeats.contains(seatId))
+    .isNotEmpty;
+
   final Color berthColor = isSelected
     ? const Color(0xFF1A56DB)
     : count >= 3
@@ -1841,52 +1865,77 @@ Widget _buildTopViewBerth(
 
   return GestureDetector(
     onTap: isAvailable
-      ? () => _toggleSeat(seatId)
+      ? () => _onSeatTap(seatId)
       : null,
     child: SizedBox(
       width: seatW,
       height: seatH,
-      child: CustomPaint(
-        painter: TopViewBerthPainter(
-          color: berthColor,
-          isSelected: isSelected,
-          isLower: activeTemplate == 'Lower',
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment:
-              MainAxisAlignment.center,
-            children: [
-              Text(
-                seatId,
-                style: TextStyle(
-                  color: isSelected
-                    ? Colors.white
-                    : isAvailable
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          CustomPaint(
+            painter: TopViewBerthPainter(
+              color: berthColor,
+              isSelected: isSelected,
+              isLower: activeTemplate == 'Lower',
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment:
+                  MainAxisAlignment.center,
+                children: [
+                  Text(
+                    seatId,
+                    style: TextStyle(
+                      color: isSelected
                         ? Colors.white
-                        : const Color(0xFF64748B),
-                  fontSize: seatW * 0.15,
-                  fontWeight: FontWeight.w800,
-                  fontFamily:
-                    GoogleFonts.poppins()
-                    .fontFamily,
-                ),
+                        : isAvailable
+                            ? Colors.white
+                            : const Color(0xFF64748B),
+                      fontSize: seatW * 0.15,
+                      fontWeight: FontWeight.w800,
+                      fontFamily:
+                        GoogleFonts.poppins()
+                        .fontFamily,
+                    ),
+                  ),
+                  if (count > 0)
+                    Text(
+                      '$count',
+                      style: TextStyle(
+                        color: Colors.white
+                          .withOpacity(0.8),
+                        fontSize: seatW * 0.13,
+                        fontFamily:
+                          GoogleFonts.poppins()
+                          .fontFamily,
+                      ),
+                    ),
+                ],
               ),
-              if (count > 0)
-                Text(
-                  '$count',
-                  style: TextStyle(
-                    color: Colors.white
-                      .withOpacity(0.8),
-                    fontSize: seatW * 0.13,
-                    fontFamily:
-                      GoogleFonts.poppins()
-                      .fontFamily,
+            ),
+          ),
+          if (hasWomenOnly && count > 0)
+            Positioned(
+              top: -2,
+              right: -2,
+              child: Container(
+                width: 14, height: 14,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEC4899),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white, width: 1.5,
                   ),
                 ),
-            ],
-          ),
-        ),
+                child: const Icon(
+                  Icons.female,
+                  size: 9,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+        ],
       ),
     ),
   );

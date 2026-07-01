@@ -168,6 +168,7 @@ List<BusModel> getMockBuses() {
       },
       busType: 'AC Sleeper',
       amenities: ['AC', 'Blanket', 'Pillow', 'Charging', 'Water'],
+      womenOnlySeats: ['1A', '1B', 'L1A', 'L1B'],
     ),
     BusModel(
       id: 5,
@@ -462,6 +463,7 @@ List<BusModel> getMockBuses() {
       },
       busType: 'AC Sleeper',
       amenities: ['AC', 'Blanket', 'Pillow', 'Charging'],
+      womenOnlySeats: ['L1A', 'U1A'],
     ),
     BusModel(
       id: 14,
@@ -683,6 +685,7 @@ List<BusModel> getMockBuses() {
         'Pillow',
         'Water',
       ],
+      womenOnlySeats: ['L1A', 'L1B', 'U1A'],
     ),
     BusModel(
       id: 21,
@@ -873,6 +876,7 @@ List<BusModel> getMockBuses() {
       },
       busType: 'AC Sleeper',
       amenities: ['AC', 'Blanket', 'Pillow', 'Charging', 'Water'],
+      womenOnlySeats: ['L1A', 'L1B', 'U1A'],
     ),
     BusModel(
       id: 27,
