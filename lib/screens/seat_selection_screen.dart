@@ -1449,10 +1449,10 @@ Widget _templateTab(
 
     // Adaptive seat size
     final seatW = ((shellW - 72) / 4)
-      .clamp(36.0, 60.0);
+      .clamp(40.0, 66.0);
     final seatH = isBerth
-      ? seatW * 0.6   // berths are wider flatter
-      : seatW * 1.15; // seats are taller
+      ? seatW * 0.75  // berths are wider flatter
+      : seatW * 1.35; // seats are taller
     final rowH = seatH + 20;
 
     return Container(
@@ -1722,12 +1722,6 @@ Widget _buildTopViewSeat(
     activeTemplate]!.contains(seatId);
   final isAvailable = count > 0;
 
-  final seaterBusesForThisSeat = routeBuses
-    .where((b) => b.layout != 'Lower' &&
-      b.layout != 'Upper' &&
-      b.availableSeats.contains(seatId))
-    .toList();
-
   final hasWomenOnly = UniversalTemplateLogic
     .getWomenOnlyBuses(
       seatId,
@@ -1739,10 +1733,10 @@ Widget _buildTopViewSeat(
   final Color seatColor = isSelected
     ? const Color(0xFF1A56DB)
     : count >= 3
-      ? const Color(0xFF16A34A)
+      ? const Color(0xFFB8C8F0)  // blue-grey
       : count > 0
-        ? const Color(0xFFF59E0B)
-        : const Color(0xFFCBD5E1);
+        ? const Color(0xFFF5C882)  // amber/orange
+        : const Color(0xFFCDD5E0); // grey
 
   return GestureDetector(
     onTap: isAvailable
@@ -1755,59 +1749,67 @@ Widget _buildTopViewSeat(
         clipBehavior: Clip.none,
         children: [
           CustomPaint(
+            size: Size(seatW, seatH),
             painter: TopViewSeatPainter(
               color: seatColor,
               isSelected: isSelected,
               isAvailable: isAvailable,
+              count: count,
             ),
+          ),
+          // Seat ID text (center of inner cushion area)
+          Positioned(
+            top: seatH * 0.35,
+            left: 0,
+            right: 0,
             child: Center(
-              child: Column(
-                mainAxisAlignment:
-                  MainAxisAlignment.center,
-                children: [
-                  Text(
-                    seatId,
-                    style: TextStyle(
-                      color: isSelected
-                        ? Colors.white
-                        : isAvailable
-                            ? Colors.white
-                            : const Color(0xFF64748B),
-                      fontSize: seatW * 0.17,
-                      fontWeight: FontWeight.w800,
-                      fontFamily:
-                        GoogleFonts.poppins()
-                        .fontFamily,
-                    ),
+              child: Text(
+                seatId,
+                style: TextStyle(
+                  fontSize: seatW * 0.20,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected
+                    ? Colors.white
+                    : count > 0
+                      ? const Color(0xFF1A56DB)
+                      : const Color(0xFF94A3B8),
+                  fontFamily: GoogleFonts.poppins()
+                    .fontFamily,
+                ),
+              ),
+            ),
+          ),
+          // Count badge (white pill at bottom)
+          Positioned(
+            top: seatH * 0.80,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 5,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  count > 0 ? '$count' : '–',
+                  style: TextStyle(
+                    fontSize: seatW * 0.16,
+                    fontWeight: FontWeight.w800,
+                    color: isSelected
+                      ? const Color(0xFF1A56DB)
+                      : count >= 3
+                        ? const Color(0xFF1A56DB)
+                        : count > 0
+                          ? const Color(0xFFD97706)
+                          : const Color(0xFF94A3B8),
+                    fontFamily: GoogleFonts.poppins()
+                      .fontFamily,
                   ),
-                  if (count > 0)
-                    Container(
-                      margin: const EdgeInsets
-                        .only(top: 2),
-                      padding:
-                        const EdgeInsets.symmetric(
-                          horizontal: 3,
-                          vertical: 1,
-                        ),
-                      decoration: BoxDecoration(
-                        color: Colors.white
-                          .withOpacity(0.25),
-                        borderRadius:
-                          BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        '$count',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: seatW * 0.13,
-                          fontWeight: FontWeight.w700,
-                          fontFamily:
-                            GoogleFonts.poppins()
-                            .fontFamily,
-                        ),
-                      ),
-                    ),
-                ],
+                ),
               ),
             ),
           ),
@@ -1858,10 +1860,10 @@ Widget _buildTopViewBerth(
   final Color berthColor = isSelected
     ? const Color(0xFF1A56DB)
     : count >= 3
-      ? const Color(0xFF16A34A)
+      ? const Color(0xFFB8C8F0)
       : count > 0
-        ? const Color(0xFFF59E0B)
-        : const Color(0xFFCBD5E1);
+        ? const Color(0xFFF5C882)
+        : const Color(0xFFCDD5E0);
 
   return GestureDetector(
     onTap: isAvailable
@@ -1874,44 +1876,30 @@ Widget _buildTopViewBerth(
         clipBehavior: Clip.none,
         children: [
           CustomPaint(
+            size: Size(seatW, seatH),
             painter: TopViewBerthPainter(
               color: berthColor,
               isSelected: isSelected,
               isLower: activeTemplate == 'Lower',
+              count: count,
             ),
-            child: Center(
-              child: Column(
-                mainAxisAlignment:
-                  MainAxisAlignment.center,
-                children: [
-                  Text(
-                    seatId,
-                    style: TextStyle(
-                      color: isSelected
-                        ? Colors.white
-                        : isAvailable
-                            ? Colors.white
-                            : const Color(0xFF64748B),
-                      fontSize: seatW * 0.15,
-                      fontWeight: FontWeight.w800,
-                      fontFamily:
-                        GoogleFonts.poppins()
-                        .fontFamily,
-                    ),
-                  ),
-                  if (count > 0)
-                    Text(
-                      '$count',
-                      style: TextStyle(
-                        color: Colors.white
-                          .withOpacity(0.8),
-                        fontSize: seatW * 0.13,
-                        fontFamily:
-                          GoogleFonts.poppins()
-                          .fontFamily,
-                      ),
-                    ),
-                ],
+          ),
+          // Count badge centered (bold)
+          Center(
+            child: Text(
+              count > 0 ? '$count' : '–',
+              style: TextStyle(
+                fontSize: seatW * 0.20,
+                fontWeight: FontWeight.w900,
+                color: isSelected
+                  ? Colors.white
+                  : count >= 3
+                    ? const Color(0xFF1A56DB)
+                    : count > 0
+                      ? const Color(0xFFD97706)
+                      : const Color(0xFF94A3B8),
+                fontFamily: GoogleFonts.poppins()
+                  .fontFamily,
               ),
             ),
           ),
@@ -3178,52 +3166,198 @@ class BerthShapePainter extends CustomPainter {
     old.primaryColor != primaryColor;
 }
 
-// TopViewSeatPainter - draws top view seat
+// TopViewSeatPainter - draws realistic seat with headrest, armrests, cushion
 class TopViewSeatPainter extends CustomPainter {
   final Color color;
   final bool isSelected;
   final bool isAvailable;
+  final int count;
 
-  TopViewSeatPainter({
+  const TopViewSeatPainter({
     required this.color,
     required this.isSelected,
     required this.isAvailable,
+    required this.count,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..style = PaintingStyle.fill;
     final w = size.width;
     final h = size.height;
+    final paint = Paint()
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
 
-    // Seat back (taller section)
-    paint.color = color;
-    final backRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(w * 0.1, 0, w * 0.8, h * 0.65),
-      const Radius.circular(6),
+    // Color calculations based on availability
+    final seatFillColor = isSelected
+      ? const Color(0xFF1A56DB)
+      : color;
+    final innerLighterColor = isSelected
+      ? Colors.white.withOpacity(0.15)
+      : count >= 3
+        ? Colors.white.withOpacity(0.45)
+        : count > 0
+          ? Colors.white.withOpacity(0.40)
+          : Colors.white.withOpacity(0.30);
+    final cushionColor = isSelected
+      ? const Color(0xFF1545A8)
+      : count >= 3
+        ? const Color(0xFF9BAED8)
+        : count > 0
+          ? const Color(0xFFE8A84C)
+          : const Color(0xFFADB8C6);
+    final borderColor = isSelected
+      ? const Color(0xFF1A56DB)
+      : count >= 3
+        ? const Color(0xFF1A56DB)
+        : count > 0
+          ? const Color(0xFFD97706)
+          : const Color(0xFF94A3B8);
+
+    // Step 1: Draw seat back (main body)
+    paint.color = seatFillColor;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          w * 0.08, h * 0.22,
+          w * 0.84, h * 0.55,
+        ),
+        const Radius.circular(10),
+      ),
+      paint,
     );
-    canvas.drawRRect(backRect, paint);
 
-    // Seat cushion (bottom section)
-    paint.color = color.withOpacity(0.7);
-    final cushionRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(w * 0.05, h * 0.65, w * 0.9, h * 0.35),
-      const Radius.circular(4),
+    // Step 2: Draw headrest (two bumps at top)
+    // Left bump
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          w * 0.18, 0,
+          w * 0.26, h * 0.24,
+        ),
+        const Radius.circular(8),
+      ),
+      paint,
     );
-    canvas.drawRRect(cushionRect, paint);
+    // Right bump
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          w * 0.56, 0,
+          w * 0.26, h * 0.24,
+        ),
+        const Radius.circular(8),
+      ),
+      paint,
+    );
 
-    // Border
+    // Step 3: Inner seat back cushion impression
+    paint.color = innerLighterColor;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          w * 0.16, h * 0.27,
+          w * 0.68, h * 0.40,
+        ),
+        const Radius.circular(7),
+      ),
+      paint,
+    );
+
+    // Step 4: Left armrest
+    paint.color = seatFillColor;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          0, h * 0.44,
+          w * 0.10, h * 0.18,
+        ),
+        const Radius.circular(4),
+      ),
+      paint,
+    );
+
+    // Step 5: Right armrest
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          w * 0.90, h * 0.44,
+          w * 0.10, h * 0.18,
+        ),
+        const Radius.circular(4),
+      ),
+      paint,
+    );
+
+    // Step 6: Seat cushion (bottom section)
+    paint.color = cushionColor;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          w * 0.10, h * 0.78,
+          w * 0.80, h * 0.20,
+        ),
+        const Radius.circular(8),
+      ),
+      paint,
+    );
+
+    // Step 7: Border outline around entire shape
     paint
-      ..color = color
+      ..color = borderColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = isSelected ? 2.0 : 1.5;
-    canvas.drawRRect(backRect, paint);
-    canvas.drawRRect(cushionRect, paint);
+      ..strokeWidth = 1.5;
+    // Border around seat back
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          w * 0.08, h * 0.22,
+          w * 0.84, h * 0.55,
+        ),
+        const Radius.circular(10),
+      ),
+      paint,
+    );
+    // Border around headrest bumps
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          w * 0.18, 0,
+          w * 0.26, h * 0.24,
+        ),
+        const Radius.circular(8),
+      ),
+      paint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          w * 0.56, 0,
+          w * 0.26, h * 0.24,
+        ),
+        const Radius.circular(8),
+      ),
+      paint,
+    );
+    // Border around cushion
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          w * 0.10, h * 0.78,
+          w * 0.80, h * 0.20,
+        ),
+        const Radius.circular(8),
+      ),
+      paint,
+    );
+    paint.style = PaintingStyle.fill;
   }
 
   @override
   bool shouldRepaint(TopViewSeatPainter old) =>
-    old.color != color || old.isSelected != isSelected;
+    old.color != color ||
+    old.isSelected != isSelected ||
+    old.count != count;
 }
 
 // TopViewBerthPainter - draws top view berth
@@ -3231,68 +3365,112 @@ class TopViewBerthPainter extends CustomPainter {
   final Color color;
   final bool isSelected;
   final bool isLower;
+  final int count;
 
-  TopViewBerthPainter({
+  const TopViewBerthPainter({
     required this.color,
     required this.isSelected,
     required this.isLower,
+    required this.count,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..style = PaintingStyle.fill;
     final w = size.width;
     final h = size.height;
+    final paint = Paint()
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
 
-    // Mattress
-    paint.color = color;
-    final mattressRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(0, h * 0.1, w, h * 0.8),
-      const Radius.circular(6),
+    // Color calculations based on availability (same as seat)
+    final berthFillColor = isSelected
+      ? const Color(0xFF1A56DB)
+      : color;
+    final innerLighterColor = isSelected
+      ? Colors.white.withOpacity(0.15)
+      : count >= 3
+        ? Colors.white.withOpacity(0.45)
+        : count > 0
+          ? Colors.white.withOpacity(0.40)
+          : Colors.white.withOpacity(0.30);
+    final pillowColor = isSelected
+      ? const Color(0xFF1545A8)
+      : count >= 3
+        ? const Color(0xFF9BAED8)
+        : count > 0
+          ? const Color(0xFFE8A84C)
+          : const Color(0xFFADB8C6);
+    final borderColor = isSelected
+      ? const Color(0xFF1A56DB)
+      : count >= 3
+        ? const Color(0xFF1A56DB)
+        : count > 0
+          ? const Color(0xFFD97706)
+          : const Color(0xFF94A3B8);
+
+    // MAIN BERTH RECTANGLE
+    paint.color = berthFillColor;
+    final berthRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(0, h * 0.05, w, h * 0.90),
+      const Radius.circular(10),
     );
-    canvas.drawRRect(mattressRect, paint);
+    canvas.drawRRect(berthRect, paint);
 
-    // Pillow
-    paint.color = color.withOpacity(0.6);
-    final pillowRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(w * 0.05, h * 0.15, w * 0.25, h * 0.7),
-      const Radius.circular(4),
+    // INNER LIGHTER AREA (mattress)
+    paint.color = innerLighterColor;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          w * 0.22, h * 0.12,
+          w * 0.72, h * 0.70,
+        ),
+        const Radius.circular(7),
+      ),
+      paint,
     );
-    canvas.drawRRect(pillowRect, paint);
 
-    // Guard rail
-    paint.color = color.withOpacity(0.8);
-    if (isLower) {
-      // Bottom guard rail
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(0, h * 0.85, w, h * 0.15),
-          const Radius.circular(3),
+    // PILLOW (left side rectangle)
+    paint.color = pillowColor;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          w * 0.04, h * 0.12,
+          w * 0.15, h * 0.70,
         ),
-        paint,
-      );
-    } else {
-      // Top guard rail
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(0, 0, w, h * 0.15),
-          const Radius.circular(3),
-        ),
-        paint,
-      );
-    }
+        const Radius.circular(6),
+      ),
+      paint,
+    );
 
-    // Border
+    // Pillow inner highlight
+    paint.color = Colors.white.withOpacity(
+      isSelected ? 0.15 : 0.45,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          w * 0.05, h * 0.15,
+          w * 0.12, h * 0.35,
+        ),
+        const Radius.circular(4),
+      ),
+      paint,
+    );
+
+    // BORDER
     paint
-      ..color = color
+      ..color = borderColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = isSelected ? 2.0 : 1.5;
-    canvas.drawRRect(mattressRect, paint);
+      ..strokeWidth = 1.5;
+    canvas.drawRRect(berthRect, paint);
+    paint.style = PaintingStyle.fill;
   }
 
   @override
   bool shouldRepaint(TopViewBerthPainter old) =>
-    old.color != color || old.isSelected != isSelected;
+    old.color != color ||
+    old.isSelected != isSelected ||
+    old.count != count;
 }
 
 // TemplateData - holds seat counts and bus maps for all templates
