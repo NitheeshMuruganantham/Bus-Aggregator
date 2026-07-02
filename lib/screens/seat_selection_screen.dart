@@ -1757,59 +1757,22 @@ Widget _buildTopViewSeat(
               count: count,
             ),
           ),
-          // Seat ID text (center of inner cushion area)
-          Positioned(
-            top: seatH * 0.35,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Text(
-                seatId,
-                style: TextStyle(
-                  fontSize: seatW * 0.20,
-                  fontWeight: FontWeight.w700,
-                  color: isSelected
-                    ? Colors.white
+          // Count badge centered (like berth)
+          Center(
+            child: Text(
+              count > 0 ? '$count' : '–',
+              style: TextStyle(
+                fontSize: seatW * 0.20,
+                fontWeight: FontWeight.w900,
+                color: isSelected
+                  ? Colors.white
+                  : count >= 3
+                    ? const Color(0xFF1A56DB)
                     : count > 0
-                      ? const Color(0xFF1A56DB)
+                      ? const Color(0xFFD97706)
                       : const Color(0xFF94A3B8),
-                  fontFamily: GoogleFonts.poppins()
-                    .fontFamily,
-                ),
-              ),
-            ),
-          ),
-          // Count badge (white pill at bottom)
-          Positioned(
-            top: seatH * 0.80,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 5,
-                  vertical: 2,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  count > 0 ? '$count' : '–',
-                  style: TextStyle(
-                    fontSize: seatW * 0.16,
-                    fontWeight: FontWeight.w800,
-                    color: isSelected
-                      ? const Color(0xFF1A56DB)
-                      : count >= 3
-                        ? const Color(0xFF1A56DB)
-                        : count > 0
-                          ? const Color(0xFFD97706)
-                          : const Color(0xFF94A3B8),
-                    fontFamily: GoogleFonts.poppins()
-                      .fontFamily,
-                  ),
-                ),
+                fontFamily: GoogleFonts.poppins()
+                  .fontFamily,
               ),
             ),
           ),
@@ -3192,14 +3155,7 @@ class TopViewSeatPainter extends CustomPainter {
     final seatFillColor = isSelected
       ? const Color(0xFF1A56DB)
       : color;
-    final innerLighterColor = isSelected
-      ? Colors.white.withOpacity(0.15)
-      : count >= 3
-        ? Colors.white.withOpacity(0.45)
-        : count > 0
-          ? Colors.white.withOpacity(0.40)
-          : Colors.white.withOpacity(0.30);
-    final cushionColor = isSelected
+    final headrestColor = isSelected
       ? const Color(0xFF1545A8)
       : count >= 3
         ? const Color(0xFF9BAED8)
@@ -3214,142 +3170,35 @@ class TopViewSeatPainter extends CustomPainter {
           ? const Color(0xFFD97706)
           : const Color(0xFF94A3B8);
 
-    // Step 1: Draw seat back (main body)
+    // Main seat body (rounded rectangle)
     paint.color = seatFillColor;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          w * 0.08, h * 0.22,
-          w * 0.84, h * 0.55,
-        ),
-        const Radius.circular(10),
+    final seatRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        w * 0.05, h * 0.20,
+        w * 0.90, h * 0.75,
       ),
-      paint,
+      const Radius.circular(10),
     );
+    canvas.drawRRect(seatRect, paint);
 
-    // Step 2: Draw headrest (two bumps at top)
-    // Left bump
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          w * 0.18, 0,
-          w * 0.26, h * 0.24,
-        ),
-        const Radius.circular(8),
+    // Headrest (small rounded square at top center)
+    paint.color = headrestColor;
+    final headrestRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        w * 0.35, 0,
+        w * 0.30, h * 0.22,
       ),
-      paint,
+      const Radius.circular(6),
     );
-    // Right bump
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          w * 0.56, 0,
-          w * 0.26, h * 0.24,
-        ),
-        const Radius.circular(8),
-      ),
-      paint,
-    );
+    canvas.drawRRect(headrestRect, paint);
 
-    // Step 3: Inner seat back cushion impression
-    paint.color = innerLighterColor;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          w * 0.16, h * 0.27,
-          w * 0.68, h * 0.40,
-        ),
-        const Radius.circular(7),
-      ),
-      paint,
-    );
-
-    // Step 4: Left armrest
-    paint.color = seatFillColor;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          0, h * 0.44,
-          w * 0.10, h * 0.18,
-        ),
-        const Radius.circular(4),
-      ),
-      paint,
-    );
-
-    // Step 5: Right armrest
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          w * 0.90, h * 0.44,
-          w * 0.10, h * 0.18,
-        ),
-        const Radius.circular(4),
-      ),
-      paint,
-    );
-
-    // Step 6: Seat cushion (bottom section)
-    paint.color = cushionColor;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          w * 0.10, h * 0.78,
-          w * 0.80, h * 0.20,
-        ),
-        const Radius.circular(8),
-      ),
-      paint,
-    );
-
-    // Step 7: Border outline around entire shape
+    // Border
     paint
       ..color = borderColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
-    // Border around seat back
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          w * 0.08, h * 0.22,
-          w * 0.84, h * 0.55,
-        ),
-        const Radius.circular(10),
-      ),
-      paint,
-    );
-    // Border around headrest bumps
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          w * 0.18, 0,
-          w * 0.26, h * 0.24,
-        ),
-        const Radius.circular(8),
-      ),
-      paint,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          w * 0.56, 0,
-          w * 0.26, h * 0.24,
-        ),
-        const Radius.circular(8),
-      ),
-      paint,
-    );
-    // Border around cushion
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          w * 0.10, h * 0.78,
-          w * 0.80, h * 0.20,
-        ),
-        const Radius.circular(8),
-      ),
-      paint,
-    );
+    canvas.drawRRect(seatRect, paint);
+    canvas.drawRRect(headrestRect, paint);
     paint.style = PaintingStyle.fill;
   }
 
